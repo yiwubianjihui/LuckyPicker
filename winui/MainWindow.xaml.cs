@@ -28,40 +28,68 @@ namespace LuckyPickerWinUI
 
         public MainWindow()
         {
-            try { System.IO.File.AppendAllText(@"C://Users//a1894//lucky_crash.log", "W1-InitComponent\n"); } catch { }
+            try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "lucky_crash.log"), "W1-InitComponent\n"); } catch { }
             InitializeComponent();
-            try { System.IO.File.AppendAllText(@"C://Users//a1894//lucky_crash.log", "W2-AfterInitXaml\n"); } catch { }
+            try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "lucky_crash.log"), "W2-AfterInitXaml\n"); } catch { }
             AppConfig.Load();
             InitCore();
-            InitTray();
-            ListenShowEvent();
-            CheckUpdateSilent();
-            classChosen = !App.BootMinimized;
-            try { System.IO.File.AppendAllText(@"C://Users//a1894//lucky_crash.log", "W3-BeforeInitBall\n"); } catch { }
-            InitBall();
-            try { System.IO.File.AppendAllText(@"C://Users//a1894//lucky_crash.log", "W4-AfterInitBall\n"); } catch { }
-            if (App.BootMinimized)
-            {
-                HideWindow();
-            }
-            else if (core.classIds.Count > 1)
-            {
-                _ = ShowClassDialogAsync();
-            }
+            // 二分：以下步骤全部禁用
+            // InitTray(); ListenShowEvent(); CheckUpdateSilent();
+            // classChosen = !App.BootMinimized;
+            // InitBall();
+            // if (App.BootMinimized) HideWindow();
+            // else if (core.classIds.Count > 1) _ = ShowClassDialogAsync();
         }
 
         // ---------- 悬浮球 ----------
+        // WinForms 窗体不能在 WinUI 线程创建（会触发 native 栈溢出 0xC0000409），
+        // 放到独立 STA 线程承载，回调经 DispatcherQueue 切回 UI 线程。
+        System.Threading.Thread? ballThread;
+
         void InitBall()
         {
-            ball = new FloatingBallForm(this);
-            if (AppConfig.BallVisible || App.BootMinimized) ball.Show();
+            var ui = DispatcherQueue;
+            var bridge = new BallHostBridge(this, ui);
+            ballThread = new System.Threading.Thread(() =>
+            {
+                try
+                {
+                    ball = new FloatingBallForm(bridge);
+                    if (AppConfig.BallVisible || App.BootMinimized) ball.Show();
+                    System.Windows.Forms.Application.Run(ball);
+                }
+                catch { }
+            });
+            ballThread.SetApartmentState(System.Threading.ApartmentState.STA);
+            ballThread.IsBackground = true;
+            ballThread.Start();
         }
 
         void ApplyBallVisibility()
         {
+            DispatcherQueue.TryEnqueue(() => ApplyBallVisibilityInner());
+        }
+
+        void ApplyBallVisibilityInner()
+        {
             if (ball == null || ball.IsDisposed) return;
             if (AppConfig.BallVisible) { if (!ball.Visible) ball.Show(); }
             else if (ball.Visible) ball.Hide();
+        }
+
+        // 悬浮球回调桥：把 WinForms 线程的回调切到 WinUI UI 线程
+        class BallHostBridge : ILuckyBallHost
+        {
+            readonly MainWindow owner;
+            readonly DispatcherQueue ui;
+            public BallHostBridge(MainWindow o, DispatcherQueue q) { owner = o; ui = q; }
+            public void OnBallClicked() => ui.TryEnqueue(owner.OnBallClicked);
+            public void OnBallPickOne() => ui.TryEnqueue(owner.OnBallPickOne);
+            public void OnBallPickMulti() => ui.TryEnqueue(owner.OnBallPickMulti);
+            public void OnBallResetPool() => ui.TryEnqueue(owner.OnBallResetPool);
+            public void OnBallHideSelf() => ui.TryEnqueue(owner.OnBallHideSelf);
+            public void OnBallQuit() => ui.TryEnqueue(owner.OnBallQuit);
+            public void ShowMainWindow() => ui.TryEnqueue(owner.ShowMainWindow);
         }
 
         // —— ILuckyBallHost 实现 ——
@@ -105,7 +133,7 @@ namespace LuckyPickerWinUI
                 HintText.Text = "※ 当前无候选人";
                 return;
             }
-            ball?.ShowPicked(picked.name);
+            try { ball?.ShowPicked(picked.name); } catch { }
             Speak(picked.name);
             AddHistory(new HistoryEntry { time = Now(), text = picked.name, classId = core.currentClassId });
             RefreshPoolStats();
@@ -119,7 +147,7 @@ namespace LuckyPickerWinUI
                 HintText.Text = "※ 当前无候选人";
                 return;
             }
-            ball?.ShowPicked(list.Count + "人");
+            try { ball?.ShowPicked(list.Count + "人"); } catch { }
             Speak(string.Join("、", list.Select(x => x.name)));
             AddHistory(new HistoryEntry { time = Now(), text = "连抽： " + string.Join("、", list.Select(x => x.name)), classId = core.currentClassId });
             RefreshPoolStats();

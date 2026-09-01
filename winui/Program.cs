@@ -12,7 +12,7 @@ namespace LuckyPickerWinUI
     {
         static Mutex singleMutex;
 
-        static string CrashLog => @"C://Users//a1894//lucky_crash.log";
+        static string CrashLog => System.IO.Path.Combine(System.IO.Path.GetTempPath(), "lucky_crash.log");
 
         static void LogCrash(string tag, Exception ex)
         {
