@@ -65,6 +65,18 @@
 
 
 
+
+## 2026-09-02 · WPF 版重构（现代界面，wpf/ 目录）
+
+- **技术路线**：WinUI 3 因系统 WindowsAppRuntime 异常无法启动，且根因是
+  manifest `dpiAware(PerMonitorV2)` 在无头/远程会话触发 0xC0000409(BEX64)；
+  改用 **WPF（.NET 8，系统原生，不依赖 WindowsAppSDK）**，manifest 去掉 dpiAware。
+- **功能完整**：主窗口（筛选/抽一人动画/连抽/屏蔽）、悬浮球（WPF 透明圆球，
+  拖动/单击/右键/球面结果）、班级小窗、托盘、单实例、/min 开机悬浮球、
+  名单导入导出、抽选记录、版本更新（静默 + 打开即查）。
+- **发布**：self-contained 发布（162MB，免装 .NET runtime），zip 66MB，
+  已部署 lr.yibianhui.cn 下载页「Windows 新版（WPF 重构）」。
+- 逻辑层复用（Core/DataIO/TTS/UpdateManager/AutoStart，System.Text.Json）。
 ## 2026-09-01 · Build 12 完善:开机悬浮球 → 班级小窗 → 直接摇人
 
 - **开机自启动完整链路**:开机自启(带 /min)时主窗口完全隐藏(启动零闪窗),

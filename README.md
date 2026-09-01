@@ -56,7 +56,7 @@
 
 | 平台 | 产物 | 获取 |
 | --- | --- | --- |
-| Windows | `Setup.exe`（安装版）/ `LuckyPicker.exe`（便携版） | [下载页](https://lr.yibianhui.cn/) 或 [Releases](https://github.com/Yibianhui/LuckyPicker/releases) |
+| Windows | `Setup.exe`（安装版）/ `LuckyPicker.exe`（便携版）/ **`LuckyPicker-win-wpf-*.zip`（新版 WPF 界面，自带运行时）** | [下载页](https://lr.yibianhui.cn/) 或 [Releases](https://github.com/Yibianhui/LuckyPicker/releases) |
 | Android | `LuckyPicker.apk`（WebView 壳，已签名） | 同上 |
 | Linux | `LuckyPicker-linux-x64.zip`（Electron，解压即用） | 同上 |
 | Web | 纯静态页面，任意现代浏览器打开 | `web/index.html` |
