@@ -1,0 +1,34 @@
+# ---- 构建产物 ----
+desktop/dist/
+dist/
+android/out/
+linux/dist/
+linux/_dl/
+site/files/
+
+# ---- 本地 SDK / 依赖（体积巨大，不入库）----
+android/sdk/
+web/node_modules/
+node_modules/
+
+# ---- 真实学生名单（隐私红线！永不入库）----
+students.json
+students-*.json
+*名单*.json
+
+# ---- 密钥与证书 ----
+*.keystore
+*.jks
+key.properties
+
+# ---- 日志与临时文件 ----
+*.log
+error.log
+TTS_server/temp_speech.mp3
+
+# ---- 本地配置 ----
+update.json
+.vscode/
+.idea/
+winui/bin/
+winui/obj/

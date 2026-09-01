@@ -1,0 +1,259 @@
+{
+  "classes": {
+    "1": "示例一班",
+    "2": "示例二班",
+    "3": "示例三班"
+  },
+  "students": [
+    {
+      "name": "张伟",
+      "classId": "1",
+      "gender": "男"
+    },
+    {
+      "name": "王芳",
+      "classId": "1",
+      "gender": "女"
+    },
+    {
+      "name": "李娜",
+      "classId": "1",
+      "gender": "女"
+    },
+    {
+      "name": "刘洋",
+      "classId": "1",
+      "gender": "男"
+    },
+    {
+      "name": "陈静",
+      "classId": "1",
+      "gender": "女"
+    },
+    {
+      "name": "杨帆",
+      "classId": "1",
+      "gender": "男"
+    },
+    {
+      "name": "赵磊",
+      "classId": "1",
+      "gender": "男"
+    },
+    {
+      "name": "黄敏",
+      "classId": "1",
+      "gender": "女"
+    },
+    {
+      "name": "周杰",
+      "classId": "1",
+      "gender": "男"
+    },
+    {
+      "name": "吴迪",
+      "classId": "1",
+      "gender": "男"
+    },
+    {
+      "name": "徐婷",
+      "classId": "1",
+      "gender": "女"
+    },
+    {
+      "name": "孙强",
+      "classId": "1",
+      "gender": "男"
+    },
+    {
+      "name": "马超",
+      "classId": "1",
+      "gender": "男"
+    },
+    {
+      "name": "朱琳",
+      "classId": "1",
+      "gender": "女"
+    },
+    {
+      "name": "胡军",
+      "classId": "1",
+      "gender": "男"
+    },
+    {
+      "name": "林晓",
+      "classId": "1",
+      "gender": "女"
+    },
+    {
+      "name": "郭涛",
+      "classId": "1",
+      "gender": "男"
+    },
+    {
+      "name": "何佳",
+      "classId": "1",
+      "gender": "女"
+    },
+    {
+      "name": "高翔",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "罗雪",
+      "classId": "2",
+      "gender": "女"
+    },
+    {
+      "name": "郑帅",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "梁月",
+      "classId": "2",
+      "gender": "女"
+    },
+    {
+      "name": "谢东",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "宋佳",
+      "classId": "2",
+      "gender": "女"
+    },
+    {
+      "name": "唐磊",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "许诺",
+      "classId": "2",
+      "gender": "女"
+    },
+    {
+      "name": "韩冰",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "冯远",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "邓琪",
+      "classId": "2",
+      "gender": "女"
+    },
+    {
+      "name": "曹阳",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "彭飞",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "曾露",
+      "classId": "2",
+      "gender": "女"
+    },
+    {
+      "name": "潘阳",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "袁圆",
+      "classId": "2",
+      "gender": "女"
+    },
+    {
+      "name": "蔡明",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "蒋一",
+      "classId": "2",
+      "gender": "男"
+    },
+    {
+      "name": "余晖",
+      "classId": "3",
+      "gender": "男"
+    },
+    {
+      "name": "杜鹃",
+      "classId": "3",
+      "gender": "女"
+    },
+    {
+      "name": "叶舟",
+      "classId": "3",
+      "gender": "男"
+    },
+    {
+      "name": "程琳",
+      "classId": "3",
+      "gender": "女"
+    },
+    {
+      "name": "苏帆",
+      "classId": "3",
+      "gender": "男"
+    },
+    {
+      "name": "魏东",
+      "classId": "3",
+      "gender": "男"
+    },
+    {
+      "name": "丁兰",
+      "classId": "3",
+      "gender": "女"
+    },
+    {
+      "name": "任平",
+      "classId": "3",
+      "gender": "男"
+    },
+    {
+      "name": "沈虹",
+      "classId": "3",
+      "gender": "女"
+    },
+    {
+      "name": "姚远",
+      "classId": "3",
+      "gender": "男"
+    },
+    {
+      "name": "卢光",
+      "classId": "3",
+      "gender": "男"
+    },
+    {
+      "name": "傅颖",
+      "classId": "3",
+      "gender": "女"
+    },
+    {
+      "name": "钟意",
+      "classId": "3",
+      "gender": "男"
+    },
+    {
+      "name": "姜潮",
+      "classId": "3",
+      "gender": "男"
+    }
+  ]
+}

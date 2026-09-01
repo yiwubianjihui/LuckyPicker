@@ -1,0 +1,10 @@
+{
+  "product": "YBH幸运摇人器",
+  "version": "26H2 Build 12",
+  "build": 12,
+  "channel": "26H2",
+  "url": "https://lr.yibianhui.cn/",
+  "notes": "1. 全新桌面悬浮球：单击抽取、可拖动、抽中姓名球面显示。\n2. 新增开机自启动（登录后仅显示悬浮球）。\n3. 界面细节优化，版本与更新窗口新增偏好设置。",
+  "releaseDate": "2026-08-31",
+  "mandatory": false
+}

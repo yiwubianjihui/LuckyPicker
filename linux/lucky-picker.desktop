@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=幸运摇人器
+Comment=班级随机摇人工具
+Exec=/opt/lucky-picker/lucky-picker
+Icon=/opt/lucky-picker/resources/app/icon.png
+Terminal=false
+Type=Application
+Categories=Utility;Education;

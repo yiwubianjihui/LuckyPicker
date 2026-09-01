@@ -1,0 +1,159 @@
+<Window
+    x:Class="LuckyPickerWinUI.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:prims="using:Microsoft.UI.Xaml.Controls.Primitives"
+    mc:Ignorable="d"
+    Title="YBH幸运摇人器">
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ============ 顶部：标题 + 班级横幅 + 设置 ============ -->
+        <Grid Grid.Row="0" Padding="28,18,28,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock x:Name="TitleText" Text="YBH幸运摇人器" FontSize="26" FontWeight="Bold"
+                           Foreground="#2563EB" />
+                <TextBlock x:Name="SubText" Text="智能抽人 · 不重复 · 屏蔽 · 连抽 · 语音播报 · 26H2 Build 13"
+                           FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Margin="0,4,0,0" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Top">
+                <Border Background="#EEF2FA" CornerRadius="12" Padding="14,6">
+                    <TextBlock x:Name="ClassBadgeText" Text="● 当前班级：-" FontSize="12"
+                               Foreground="#2C5282" VerticalAlignment="Center" />
+                </Border>
+                <Button x:Name="SettingsBtn" Content="设置 ▾" Padding="14,6" CornerRadius="10">
+                    <Button.Flyout>
+                        <MenuFlyout x:Name="SettingsMenu" Placement="BottomEdgeAlignedRight">
+                            <MenuFlyoutItem Text="名单管理 · 导入" Click="OnMenuEditor" />
+                            <MenuFlyoutItem Text="抽选记录" Click="OnMenuHistory" />
+                            <MenuFlyoutItem Text="版本 · 更新" Click="OnMenuAbout" />
+                            <MenuFlyoutSeparator />
+                            <ToggleMenuFlyoutItem x:Name="MenuAutoStart" Text="开机自启动" Click="OnMenuAutoStart" />
+                            <ToggleMenuFlyoutItem x:Name="MenuBall" Text="桌面悬浮球" Click="OnMenuBall" />
+                            <MenuFlyoutSeparator />
+                            <MenuFlyoutItem Text="退出程序" Click="OnMenuQuit" />
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- ============ 主体 ============ -->
+        <Grid Grid.Row="1" Padding="28,12,28,8" RowSpacing="14">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- 筛选卡片 -->
+            <Border Grid.Row="0" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="14" Padding="18,14">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="筛选" FontWeight="Bold" FontSize="14" Foreground="#3B5A8C" />
+                    <StackPanel Orientation="Horizontal" Spacing="14">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="班级" VerticalAlignment="Center" FontSize="13" />
+                            <ComboBox x:Name="ClassCombo" MinWidth="160" SelectionChanged="OnClassChanged" />
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <TextBlock Text="性别" VerticalAlignment="Center" FontSize="13" />
+                            <prims:ToggleButton x:Name="GenderAll" Content="都抽" IsChecked="True" Click="OnGenderClick" />
+                            <prims:ToggleButton x:Name="GenderMale" Content="男生" Click="OnGenderClick" />
+                            <prims:ToggleButton x:Name="GenderFemale" Content="女生" Click="OnGenderClick" />
+                        </StackPanel>
+                        <ToggleSwitch x:Name="NoRepeatSwitch" Header="不重复模式" OnContent="开" OffContent="关"
+                                      IsOn="True" Toggled="OnNoRepeatToggled" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- 动作按钮 -->
+            <Grid Grid.Row="1" ColumnSpacing="14" Margin="0,2,0,2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="PickBtn" Grid.Column="0" Content="抽一人" Height="56"
+                        CornerRadius="28" FontSize="17" FontWeight="Bold"
+                        Background="#1E3A8A" Foreground="White" Click="OnPick" />
+                <Button x:Name="MultiBtn" Grid.Column="1" Content="连抽五人" Height="56"
+                        CornerRadius="28" FontSize="17" FontWeight="Bold"
+                        Background="#2D3E6E" Foreground="White" Click="OnMulti" />
+            </Grid>
+
+            <!-- 结果区 -->
+            <Border Grid.Row="2" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="14" Padding="20,14">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Background="#ECFDF5" CornerRadius="10" Padding="10,4" HorizontalAlignment="Left">
+                            <TextBlock x:Name="VoiceStatusText" Text="♪ 语音：准备中" FontSize="11"
+                                       Foreground="#065F46" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                            <TextBlock x:Name="PoolStatsText" Text="" FontSize="12" VerticalAlignment="Center"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <Button x:Name="ResetBtn" Content="重置不重复池" Click="OnReset" Padding="12,4"
+                                    CornerRadius="8" Background="#4B5563" Foreground="White" FontSize="12" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid Grid.Row="1" VerticalAlignment="Center">
+                        <TextBlock x:Name="PickedName" Text="——" FontSize="52" FontWeight="Bold"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <StackPanel x:Name="MultiPanel" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    Orientation="Horizontal" Spacing="8" Visibility="Collapsed" />
+                    </Grid>
+
+                    <TextBlock x:Name="HintText" Grid.Row="2" Text="点击「抽一人」开始抽取"
+                               FontSize="12.5" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </Grid>
+            </Border>
+
+            <!-- 屏蔽区 -->
+            <Border Grid.Row="3" Background="#FFF7ED" BorderBrush="#FED7AA" BorderThickness="1"
+                    CornerRadius="14" Padding="18,12">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="屏蔽名单（被屏蔽的学生不参与抽取）" FontWeight="Bold" FontSize="12.5" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBox x:Name="BlockInput" PlaceholderText="输入学生姓名" MinWidth="260" Height="34"
+                                 KeyDown="OnBlockKeyDown" />
+                        <Button x:Name="AddBlockBtn" Content="屏蔽此人" Click="OnAddBlock" Padding="14,6" />
+                    </StackPanel>
+                    <StackPanel x:Name="BlockChips" Orientation="Horizontal" Spacing="6" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- 底部 -->
+        <TextBlock Grid.Row="2" Text="YBH幸运摇人器 · 单实例运行 · 托盘常驻 · 更新自动提醒"
+                   FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                   Padding="28,0,28,14" HorizontalAlignment="Center" />
+    </Grid>
+</Window>

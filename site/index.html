@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#2563eb" />
+<title>YBH幸运摇人器 · 官方下载</title>
+<meta name="description" content="YBH幸运摇人器：多端班级随机摇人工具。Win32 / Android / Linux / Web，桌面悬浮球 + 开机自启动 + 自然语音播报。" />
+<style>
+  :root {
+    --bg:#f0f6ff; --card:#ffffff; --ink:#1f2b4e; --sub:#5a6e8a;
+    --brand:#2563eb; --ok:#0e7a4e; --line:#e2e8f0; --soft:#f5f8fd;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; }
+  body {
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap { max-width:680px; margin:0 auto; padding:26px 16px 48px; }
+  header { display:flex; align-items:center; gap:14px; }
+  .logo { width:58px; height:58px; border-radius:50%; box-shadow:0 4px 14px rgba(37,99,235,.25);
+    background:radial-gradient(circle at 32% 28%, #60a5fa, #2563eb 72%); display:grid; place-items:center;
+    color:#fff; font-size:26px; font-weight:800; flex:none; }
+  h1 { font-size:21px; margin:0; letter-spacing:.4px; }
+  .tag { color:var(--sub); font-size:13px; margin-top:2px; }
+
+  .oss {
+    display:inline-flex; align-items:center; gap:7px; margin-top:8px;
+    background:#22272e; color:#fff; text-decoration:none;
+    font-size:12.5px; font-weight:600; padding:6px 13px; border-radius:999px;
+  }
+  .oss:hover { background:#000; }
+  .oss svg { width:15px; height:15px; fill:#fff; }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:18px; margin-top:16px; box-shadow:0 2px 10px rgba(0,0,0,.04); }
+  .card.tight { padding:16px; }
+
+  .ver { display:inline-flex; align-items:center; gap:7px; background:#e8f0ff; color:var(--ok); font-weight:700; font-size:12.5px; padding:5px 11px; border-radius:999px; }
+  .ver .dot { width:7px; height:7px; border-radius:50%; background:var(--ok); }
+  .notes { margin:10px 0 0; color:var(--sub); font-size:13.5px; }
+  .notes b { color:var(--ink); font-weight:600; }
+
+  .dl-main { display:block; margin-top:16px; padding:17px 18px; border-radius:16px;
+    background:linear-gradient(135deg,#2563eb,#1e40af); color:#fff; text-decoration:none; text-align:center;
+    box-shadow:0 6px 18px rgba(37,99,235,.30); transition:transform .06s ease, filter .15s ease; }
+  .dl-main:active { transform:scale(.99); }
+  .dl-main:hover { filter:brightness(1.08); }
+  .dl-main .t { display:block; font-size:17px; font-weight:700; letter-spacing:.3px; }
+  .dl-main .s { display:block; margin-top:3px; font-size:12.5px; opacity:.85; font-weight:400; }
+  .hint { margin:10px 2px 0; color:var(--sub); font-size:12.5px; text-align:center; }
+
+  details.more { margin-top:14px; border:1px solid var(--line); border-radius:14px; background:var(--soft); overflow:hidden; }
+  details.more > summary {
+    cursor:pointer; list-style:none; padding:12px 16px; font-size:13.5px; font-weight:600;
+    color:var(--brand); display:flex; align-items:center; justify-content:space-between; gap:8px;
+  }
+  details.more > summary::-webkit-details-marker { display:none; }
+  details.more > summary::after { content:'＋'; font-size:15px; font-weight:400; opacity:.7; }
+  details.more[open] > summary::after { content:'－'; }
+  details.more > summary:hover { background:#edf3ff; }
+  .more-body { padding:2px 16px 14px; border-top:1px solid var(--line); }
+
+  .opt { display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid var(--line); }
+  .opt:last-child { border-bottom:0; }
+  .opt .ic { width:34px; height:34px; flex:none; display:grid; place-items:center; border-radius:10px; background:#fff; border:1px solid var(--line); font-size:16px; }
+  .opt .txt { flex:1; min-width:0; }
+  .opt .txt b { display:block; font-size:14px; font-weight:600; }
+  .opt .txt span { display:block; font-size:12px; color:var(--sub); }
+  .opt a.go { flex:none; font-size:12.5px; font-weight:600; color:var(--brand); text-decoration:none; border:1.5px solid var(--brand); border-radius:9px; padding:6px 12px; }
+  .opt a.go:hover { background:#e8f0ff; }
+
+  /* 互通入口 */
+  .sister { display:flex; align-items:center; gap:12px; background:#f1f5f9; border:1px dashed #cbd5e1; border-radius:14px; padding:12px 14px; margin-top:16px; text-decoration:none; color:var(--ink); }
+  .sister:hover { background:#e8f0ff; border-color:#93c5fd; }
+  .sister .ic { width:40px; height:40px; border-radius:12px; background:#505050; color:#fff; display:grid; place-items:center; font-size:19px; flex:none; }
+  .sister .txt b { display:block; font-size:14.5px; }
+  .sister .txt span { font-size:12px; color:var(--sub); }
+  .sister .go { margin-left:auto; flex:none; font-size:12.5px; font-weight:700; color:var(--brand); }
+
+  h2 { font-size:15px; margin:0 0 4px; }
+  .steps { margin:10px 0 0; padding-left:20px; font-size:13.5px; }
+  .steps li { margin:5px 0; }
+  .mono { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:11.5px; background:#f1f0ee; padding:8px 10px; border-radius:8px; word-break:break-all; }
+  .feat { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .feat div { background:var(--soft); border:1px solid var(--line); border-radius:12px; padding:11px; font-size:12.5px; }
+  .feat b { display:block; margin-bottom:2px; }
+
+  /* 开发记录时间线 */
+  .tl { position:relative; margin:10px 0 0; padding-left:22px; }
+  .tl::before { content:''; position:absolute; left:6px; top:6px; bottom:6px; width:2px; background:var(--line); }
+  .tl .ev { position:relative; padding:0 0 16px; }
+  .tl .ev::before { content:''; position:absolute; left:-19px; top:6px; width:9px; height:9px; border-radius:50%; background:var(--brand); border:2px solid #fff; box-shadow:0 0 0 2px var(--brand); }
+  .tl .ev b { display:block; font-size:13.5px; }
+  .tl .ev span { color:var(--sub); font-size:12px; }
+
+  footer { margin-top:22px; color:var(--sub); font-size:12px; text-align:center; line-height:1.8; }
+  a.link { color:var(--brand); }
+  @media (max-width:480px){ .feat { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">摇</div>
+    <div>
+      <h1>YBH幸运摇人器</h1>
+      <div class="tag">义编会（YBH）· 多端班级随机摇人工具</div>
+      <a class="oss" href="https://github.com/Yibianhui/LuckyPicker" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        开源项目 · 查看源码
+      </a>
+    </div>
+  </header>
+
+  <div class="card">
+    <span class="ver"><span class="dot"></span> 最新稳定版 26H2 Build 13</span>
+    <p class="notes">
+      <b>桌面悬浮球</b>：单击抽一人、可拖动、抽中姓名球面显示，投屏远距离可见。<br/>
+      <b>开机自启动</b>：登录后仅显示悬浮球，无需管理员权限，卸载自动清理。<br/>
+      <b>自然语音</b>：微软神经语音直连播报（与 Edge TTS 同源音色），断网自动降级本地语音。
+    </p>
+
+    <a class="dl-main" href="download/LuckyPicker-win-setup-26H2-build13.exe">
+      <span class="t">⬇ 下载 Windows 版</span>
+      <span class="s">安装程序 · Windows 10 / 11 · 可勾选悬浮球与开机自启动</span>
+    </a>
+    <p class="hint">不确定选哪个就用这个。便携版 / Android / Linux 请在下方「其他下载选项」里挑。</p>
+
+    <details class="more">
+      <summary>其他下载选项</summary>
+      <div class="more-body">
+        <div class="opt">
+          <div class="ic">📦</div>
+          <div class="txt"><b>Windows 便携版</b><span>免安装，解压即用（含示例名单）</span></div>
+          <a class="go" href="download/LuckyPicker-win-portable-26H2-build13.zip">下载</a>
+        </div>
+        <div class="opt">
+          <div class="ic">📱</div>
+          <div class="txt"><b>Android 版</b><span>APK · 支持开机自启开关 · Android 7.0+</span></div>
+          <a class="go" href="download/LuckyPicker-android-26H2-build13.apk">下载</a>
+        </div>
+        <div class="opt">
+          <div class="ic">🐧</div>
+          <div class="txt"><b>Linux 版</b><span>Electron x64 · 解压即用</span></div>
+          <a class="go" href="download/LuckyPicker-linux-x64-26H2-build13.zip">下载</a>
+        </div>
+        <div class="opt">
+          <div class="ic">🌐</div>
+          <div class="txt"><b>网页版</b><span>打开即用，无需安装（悬浮球同款）</span></div>
+          <a class="go" href="web/">打开</a>
+        </div>
+        <div class="opt">
+          <div class="ic">🧩</div>
+          <div class="txt"><b>源码</b><span>多端工程，MIT 协议开源</span></div>
+          <a class="go" href="https://github.com/Yibianhui/LuckyPicker">GitHub</a>
+        </div>
+        <div class="opt">
+          <div class="ic">🗂️</div>
+          <div class="txt"><b>历史版本</b><span>全部旧版统一归档在 GitHub Releases</span></div>
+          <a class="go" href="https://github.com/Yibianhui/LuckyPicker/releases">查看</a>
+        </div>
+      </div>
+    </details>
+  </div>
+
+  <a class="sister" href="https://app.yibianhui.cn/">
+    <div class="ic">📰</div>
+    <div class="txt"><b>YBH 博客客户端</b><span>刷文章、逛整站、投稿、通知——义编会官方 App</span></div>
+    <span class="go">去看看 →</span>
+  </a>
+
+  <details class="card tight">
+    <summary style="cursor:pointer;font-weight:600;font-size:13.5px;color:var(--brand);">安装与校验</summary>
+    <ul class="steps">
+      <li>Windows：双击 Setup.exe 安装；便携版解压后双击 LuckyPicker.exe。</li>
+      <li>Android：点按安装；遇到「未知来源」拦截，按提示授权一次即可。</li>
+      <li>Linux：解压后 <span class="mono" style="display:inline;padding:1px 6px;">./start.sh</span>（zip 解压后可能需 <span class="mono" style="display:inline;padding:1px 6px;">chmod +x</span>）。</li>
+      <li>程序内「版本 · 更新」可检查新版本（默认读取本页 update.json）。</li>
+    </ul>
+    <p style="margin:12px 0 6px;font-weight:600;font-size:13px;">Windows 安装包 SHA-256：</p>
+    <div class="mono" id="sha">（构建后自动填入）</div>
+    <p style="margin:8px 0 0;font-size:12.5px;color:var(--sub);">全部文件校验见 <a class="link" href="download/SHA256SUMS.txt">SHA256SUMS.txt</a>。</p>
+  </details>
+
+  <div class="card tight">
+    <h2>功能一览</h2>
+    <div class="feat" style="margin-top:10px;">
+      <div><b>悬浮球</b>单击抽取、可拖动、抽中球面显示</div>
+      <div><b>开机自启动</b>登录仅留悬浮球，卸载自动清理</div>
+      <div><b>摇人核心</b>班级/性别筛选、不重复、连抽五人</div>
+      <div><b>自然语音</b>微软神经语音直连 + 多层降级</div>
+      <div><b>名单管理</b>程序内编辑 + Excel/CSV 导入</div>
+      <div><b>抽选记录</b>历史保留 500 条，支持导出 CSV</div>
+    </div>
+  </div>
+
+  <div class="card tight">
+    <h2>开发记录</h2>
+    <div class="tl">
+      <div class="ev"><b>26H2 Build 13 · 单实例保护 + 更新检查增强 + 开机悬浮球班级小窗</b><span>2026-09-02</span></div>
+      <div class="ev"><b>26H2 Build 11 · 版本体系：更名 YBH幸运摇人器、检查更新</b><span>2026-08-15</span></div>
+      <div class="ev"><b>多端化：Android + Linux + Web 同一套核心</b><span>2026-08-14</span></div>
+      <div class="ev"><b>更自然语音：微软神经语音直连 + Excel 导入</b><span>2026-08-14</span></div>
+      <div class="ev"><b>Win32 版诞生：摇人核心 + 安装程序</b><span>2026-08-14</span></div>
+      <div class="ev"><b>起点：LuckyRandom 网页原型</b><span>2026-08 初</span></div>
+    </div>
+    <p style="margin:4px 0 0;font-size:12px;color:var(--sub);">完整记录见 <a class="link" href="https://github.com/Yibianhui/LuckyPicker/blob/main/docs/CHANGELOG.md">docs/CHANGELOG.md</a></p>
+  </div>
+
+  <footer>
+    义编会（YBH）· 更新接口 https://lr.yibianhui.cn/update.json<br/>
+    开源 <a class="link" href="https://github.com/Yibianhui/LuckyPicker">GitHub</a> · 提交 Issue / 参与开发都欢迎<br/>
+    另一款产品：<a class="link" href="https://app.yibianhui.cn/">YBH 博客客户端下载</a>
+  </footer>
+</div>
+</body>
+</html>
