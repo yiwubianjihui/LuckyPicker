@@ -32,3 +32,5 @@ update.json
 .idea/
 winui/bin/
 winui/obj/
+wpf/bin/
+wpf/obj/

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>LuckyPickerWpf</RootNamespace>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AssemblyTitle>YBH幸运摇人器</AssemblyTitle>
+    <AssemblyName>LuckyPicker</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Speech" Version="8.0.0" />
+  </ItemGroup>
+</Project>
