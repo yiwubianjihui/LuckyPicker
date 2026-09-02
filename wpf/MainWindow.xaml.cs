@@ -334,6 +334,50 @@ namespace LuckyPickerWpf
             try { tts.QueueWarmup(GetClassNames()); } catch { }
         }
 
+        // ---------------- 快捷键（与经典版对齐） ----------------
+        void OnWindowKeyDown(object sender, KeyEventArgs e)
+        {
+            bool editing = e.OriginalSource is System.Windows.Controls.TextBox
+                        || e.OriginalSource is System.Windows.Controls.ComboBox;
+            var mod = Keyboard.Modifiers;
+            if (e.Key == Key.Space && !editing)
+            {
+                e.Handled = true;
+                OnPick(this, new RoutedEventArgs());
+            }
+            else if (e.Key == Key.M && mod == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                OnMulti(this, new RoutedEventArgs());
+            }
+            else if (e.Key == Key.R && mod == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                OnReset(this, new RoutedEventArgs());
+            }
+            else if (e.Key == Key.E && mod == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                ShowEditorDialog();
+            }
+            else if (e.Key == Key.H && mod == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                ShowHistoryDialog();
+            }
+            else if (e.Key == Key.U && mod == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                ShowAboutDialog();
+            }
+            else if (e.Key == Key.V && mod == ModifierKeys.Control)
+            {
+                e.Handled = true;
+                string last = PickedName.Text;
+                if (!string.IsNullOrEmpty(last) && last != "——") Speak(last);
+            }
+        }
+
         void OnMenuEditor(object sender, RoutedEventArgs e) => ShowEditorDialog();
         void OnMenuHistory(object sender, RoutedEventArgs e) => ShowHistoryDialog();
         void OnMenuAbout(object sender, RoutedEventArgs e) => ShowAboutDialog();
