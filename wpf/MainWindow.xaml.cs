@@ -93,13 +93,6 @@ namespace LuckyPickerWpf
             RefreshPoolStats(); ResetResult();
         }
 
-        void OnNoRepeatToggled(object sender, RoutedEventArgs e)
-        {
-            core.noRepeat = NoRepeatBox.IsChecked == true;
-            core.ResetPoolKeepLast();
-            RefreshPoolStats();
-        }
-
         // ---------- 抽取 ----------
         async void OnPick(object sender, RoutedEventArgs e)
         {
@@ -125,7 +118,7 @@ namespace LuckyPickerWpf
         {
             core.ResetPool();
             ResetResult();
-            HintText.Text = "√ 不重复池已重置，可以开始抽取";
+            HintText.Text = "√ 已重置，可以重新抽取";
         }
 
         void ResetResult()
@@ -372,7 +365,7 @@ namespace LuckyPickerWpf
                 clicked: OnBallClicked,
                 pickOne: DoBallPickOne,
                 pickMulti: DoBallPickMulti,
-                resetPool: () => { core.ResetPool(); HintText.Text = "√ 不重复池已重置"; RefreshPoolStats(); },
+                resetPool: () => { core.ResetPool(); HintText.Text = "√ 已重置，可以重新抽取"; RefreshPoolStats(); },
                 hideSelf: () => { AppConfig.BallVisible = false; AppConfig.Save(); ApplyBallVisibility(); },
                 quit: QuitApp,
                 showMainWin: ShowMainWindow);
