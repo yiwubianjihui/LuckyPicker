@@ -778,7 +778,7 @@ namespace LuckyPickerWpf
             var panel = new StackPanel { Margin = new Thickness(20) };
             panel.Children.Add(new TextBlock
             {
-                Text = "当前版本：26H2 Build 13（内部构建 13）\n更新通道：26H2\n产品：YBH幸运摇人器",
+                Text = "当前版本：26H2 Build 14（内部构建 14）\n更新通道：26H2\n产品：YBH幸运摇人器",
                 FontSize = 13, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12)
             });
             var resultBox = new TextBlock

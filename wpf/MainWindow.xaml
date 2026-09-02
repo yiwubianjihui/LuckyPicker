@@ -124,7 +124,7 @@
             <StackPanel>
                 <TextBlock x:Name="TitleText" Text="YBH幸运摇人器" FontSize="27" FontWeight="Bold"
                            Foreground="#1E40AF" />
-                <TextBlock x:Name="SubText" Text="班级随机摇人 · 26H2 Build 13"
+                <TextBlock x:Name="SubText" Text="班级随机摇人 · 26H2 Build 14"
                            FontSize="11.5" Foreground="#7C8DB5" Margin="2,3,0,0" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">

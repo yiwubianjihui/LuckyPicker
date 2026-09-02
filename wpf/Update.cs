@@ -36,9 +36,9 @@ namespace LuckyPickerWpf
     public static class AppVersion
     {
         public const string ProductName = "YBH幸运摇人器";
-        public const string Display = "26H2 Build 13";
+        public const string Display = "26H2 Build 14";
         public const string Channel = "26H2";
-        public const int Build = 13;
+        public const int Build = 14;
         public const string UpdateUrlDefault = "https://lr.yibianhui.cn/update.json";
         // 备用接口：主接口失效时自动回退尝试（镜像站 / 历史地址）
         public const string UpdateUrlLegacy = "https://app.yibianhui.cn/luckypicker/update.json";

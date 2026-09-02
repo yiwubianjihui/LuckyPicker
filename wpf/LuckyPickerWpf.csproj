@@ -8,6 +8,9 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyTitle>YBH幸运摇人器</AssemblyTitle>
+    <Version>26.14.0.0</Version>
+    <AssemblyVersion>26.14.0.0</AssemblyVersion>
+    <FileVersion>26.14.0.0</FileVersion>
     <AssemblyName>LuckyPicker</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
