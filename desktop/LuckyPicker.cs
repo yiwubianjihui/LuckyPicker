@@ -22,7 +22,7 @@ using System.Web.Script.Serialization;
 [assembly: AssemblyCompany("YBH")]
 [assembly: AssemblyVersion("26.11.0.0")]
 [assembly: AssemblyFileVersion("26.11.0.0")]
-[assembly: AssemblyInformationalVersion("26H2 Build 11")]
+[assembly: AssemblyInformationalVersion("26H2 Build 14")]
 
 namespace LuckyPicker
 {

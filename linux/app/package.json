@@ -1,6 +1,6 @@
 {
   "name": "lucky-picker",
-  "version": "26H2.12",
+  "version": "26H2.14",
   "description": "YBH幸运摇人器 - 班级随机摇人工具",
   "main": "main.js",
   "private": true

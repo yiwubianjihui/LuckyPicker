@@ -1,13 +1,13 @@
 # YBH幸运摇人器
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-26H2%20Build%2013-blue.svg)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-26H2%20Build%2014-blue.svg)](docs/CHANGELOG.md)
 [![GitHub](https://img.shields.io/badge/GitHub-Yibianhui%2FLuckyPicker-black.svg)](https://github.com/Yibianhui/LuckyPicker)
 
 多端班级随机摇人工具：**Windows（WPF 重构版为主）+ Android + Linux + Web**。
 按班级 / 性别抽取学生，固定不重复模式、连抽五人、屏蔽名单、
 **自然语音播报**（微软神经语音 + 本地 SAPI 自动降级）、**Excel/CSV 名单导入**、
-**抽选记录**、**桌面悬浮球**与**开机自启动**、**单实例保护**与**托盘新版本提醒**（Build 13）。
+**抽选记录**、**桌面悬浮球**与**开机自启动**、**单实例保护**与**托盘新版本提醒**。
 
 > Windows 新版采用 **WPF 重构**（`wpf/`，现代界面、悬浮球/班级小窗/托盘，解压即用）；
 > 经典 WinForms 版（`desktop/`，Setup 安装版）保留可用，不再演进。

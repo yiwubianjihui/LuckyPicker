@@ -21,7 +21,7 @@ using Microsoft.Win32;
 [assembly: AssemblyCompany("YBH")]
 [assembly: AssemblyVersion("26.12.0.0")]
 [assembly: AssemblyFileVersion("26.12.0.0")]
-[assembly: AssemblyInformationalVersion("26H2 Build 13")]
+[assembly: AssemblyInformationalVersion("26H2 Build 14")]
 
 namespace LuckyPickerSetup
 {
@@ -46,7 +46,7 @@ namespace LuckyPickerSetup
         public const string LegacyShortcutName = "幸运摇人器";
         public const string UninstallShortcutName = "卸载 YBH幸运摇人器";
         public const string RegKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\LuckyPicker";
-        public const string Version = "26H2 Build 13";
+        public const string Version = "26H2 Build 14";
         // 与主程序 AutoStart 保持一致的 Run 注册表项
         public const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
         public const string RunValueName = "YBHLuckyPicker";
