@@ -546,6 +546,15 @@ namespace LuckyPickerWpf
                     core.Reload();
                     InitCore();
                     status.Text = "已导入 " + data.students.Count + " 名学生并保存 ✓";
+                    // 询问：批量预生成语音缓存（此后抽取即读，无需联网等待）
+                    var askPrefetch = MessageBox.Show(this,
+                        "已导入 " + data.students.Count + " 名学生。\n\n是否立即预生成全部姓名的语音缓存？\n（生成后抽取播报秒开，不依赖网络；生成中可随时取消）",
+                        "预生成语音缓存", MessageBoxButton.YesNo, MessageBoxImage.Question);
+                    if (askPrefetch == MessageBoxResult.Yes)
+                    {
+                        var names = data.students.Select(x => x.name).Distinct().ToList();
+                        Dispatcher.BeginInvoke(() => ShowPrefetchDialog(names));
+                    }
                 }
                 catch (Exception ex) { status.Text = "导入失败：" + ex.Message; status.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 38, 38)); }
             };
@@ -570,6 +579,65 @@ namespace LuckyPickerWpf
             panel.Children.Add(btnOpenDir);
             panel.Children.Add(status);
             dlg.Content = panel;
+            dlg.ShowDialog();
+        }
+
+        // ---------------- 批量预生成语音缓存（进度 + 取消） ----------------
+        void ShowPrefetchDialog(List<string> names)
+        {
+            if (names == null || names.Count == 0 || tts == null) return;
+            var dlg = new Window
+            {
+                Title = "预生成语音缓存", Width = 480, Height = 210,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this,
+                ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false
+            };
+            var panel = new StackPanel { Margin = new Thickness(22) };
+            panel.Children.Add(new TextBlock
+            {
+                Text = "正在为 " + names.Count + " 个姓名生成语音缓存（抽取播报秒开）…",
+                FontSize = 13, TextWrapping = TextWrapping.Wrap
+            });
+            var prog = new ProgressBar { Height = 16, Maximum = names.Count, Minimum = 0, Margin = new Thickness(0, 14, 0, 10) };
+            panel.Children.Add(prog);
+            var txt = new TextBlock { Text = "准备中…", FontSize = 12, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(100, 116, 139)) };
+            panel.Children.Add(txt);
+            var btnCancel = new Button
+            {
+                Content = "取消生成", Height = 32, Width = 110, Cursor = Cursors.Hand,
+                HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0)
+            };
+            panel.Children.Add(btnCancel);
+            dlg.Content = panel;
+
+            bool userClosed = false;
+            btnCancel.Click += (s, e) =>
+            {
+                userClosed = true;
+                btnCancel.IsEnabled = false;
+                txt.Text = "正在取消…（已生成的会保留）";
+                tts?.CancelPrefetch();
+            };
+            dlg.Closed += (s, e) => { userClosed = true; tts?.CancelPrefetch(); };
+
+            var ui = Dispatcher;
+            tts.PrefetchBatch(
+                names,
+                onProgress: (done, total) => ui.BeginInvoke(() =>
+                {
+                    if (!dlg.IsVisible) return;
+                    prog.Value = done;
+                    txt.Text = "正在生成 " + done + " / " + total + "…";
+                }),
+                onDone: () => ui.BeginInvoke(() =>
+                {
+                    if (!dlg.IsVisible) return;
+                    if (!userClosed)
+                    {
+                        txt.Text = "✓ 全部生成完成，抽取播报已就绪";
+                        btnCancel.IsEnabled = false;
+                    }
+                }));
             dlg.ShowDialog();
         }
 

@@ -13,6 +13,7 @@ using System.Text.Json;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.IO;
 using System.Net;
 using System.Net.WebSockets;
@@ -787,6 +788,80 @@ namespace LuckyPickerWpf
                     try { File.Delete(files[i]); } catch { }
             }
             catch { }
+        }
+
+        // ---------------- 批量预生成语音缓存（导入名单后调用，可取消、带进度） ----------------
+        volatile bool prefetchCancelled;
+
+        public void CancelPrefetch() => prefetchCancelled = true;
+
+        /// <summary>后台逐条合成名单语音并写入缓存（命中缓存直接跳过）。不播放。</summary>
+        public void PrefetchBatch(IEnumerable<string> names, Action<int, int> onProgress, Action onDone)
+        {
+            var list = names?.Where(n => !string.IsNullOrEmpty(n)).ToList();
+            if (list == null || list.Count == 0) { onDone?.Invoke(); return; }
+            Task.Run(() =>
+            {
+                prefetchCancelled = false;
+                if (!onlineOk || AppConfig.TtsSource == "off") { onDone?.Invoke(); return; }
+                string tag = EffectiveSource();
+                if (tag == "off") { onDone?.Invoke(); return; }
+                int done = 0, fails = 0;
+                foreach (var name in list)
+                {
+                    if (prefetchCancelled || stopped) break;
+                    try
+                    {
+                        string ext = tag == "edge" ? "wav" : "mp3";
+                        string file = CachePath(tag, name);
+                        if (!File.Exists(file))
+                        {
+                            byte[] data = null;
+                            if (tag == "azure")
+                            {
+                                data = MsTts.Synthesize(name, AppConfig.TtsVoice);
+                                if (data == null && AppConfig.TtsSource == "auto")
+                                {
+                                    tag = "baidu";
+                                    ext = "mp3";
+                                    file = CachePath(tag, name);
+                                }
+                            }
+                            else if (tag == "edge")
+                            {
+                                data = EdgeTts.Synthesize(name, AppConfig.TtsVoice, 2500, 8000);
+                                if (data == null)
+                                {
+                                    edgeBlocked = true;
+                                    AppConfig.EdgeBlocked = true;
+                                    AppConfig.Save();
+                                    fails++;
+                                    done++;
+                                    onProgress?.Invoke(done, list.Count);
+                                    continue;
+                                }
+                            }
+                            if (data == null && tag == "baidu")
+                            {
+                                data = BaiduTts.Synthesize(name);
+                                if (data == null) { fails++; onlineOk = false; }
+                            }
+                            if (data != null && data.Length >= 100)
+                            {
+                                Directory.CreateDirectory(CacheDir);
+                                File.WriteAllBytes(file, data);
+                                fails = 0;
+                                onlineOk = true;
+                            }
+                            else fails++;
+                        }
+                    }
+                    catch { fails++; onlineOk = false; }
+                    done++;
+                    try { onProgress?.Invoke(done, list.Count); } catch { }
+                }
+                try { onDone?.Invoke(); } catch { }
+            });
         }
 
         // ---------------- 后台预热（当前班级名单提前合成缓存） ----------------
