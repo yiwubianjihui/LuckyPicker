@@ -1,13 +1,16 @@
 # YBH幸运摇人器
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-26H2%20Build%2012-blue.svg)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-26H2%20Build%2013-blue.svg)](docs/CHANGELOG.md)
 [![GitHub](https://img.shields.io/badge/GitHub-Yibianhui%2FLuckyPicker-black.svg)](https://github.com/Yibianhui/LuckyPicker)
 
-多端班级随机摇人工具：**Win32 桌面 + Android + Linux + Web**。
-按班级 / 性别抽取学生，支持不重复模式、连抽五人、屏蔽名单、
-**微软神经语音播报**（与 Edge TTS 同源音色）、**程序内名单编辑与 Excel 导入**、
-**抽选记录**、**桌面悬浮球**与**开机自启动**（26H2 Build 12 新增）、**单实例保护**与**托盘新版本提醒**（Build 13 新增）。
+多端班级随机摇人工具：**Windows（WPF 重构版为主）+ Android + Linux + Web**。
+按班级 / 性别抽取学生，固定不重复模式、连抽五人、屏蔽名单、
+**自然语音播报**（微软神经语音 + 本地 SAPI 自动降级）、**Excel/CSV 名单导入**、
+**抽选记录**、**桌面悬浮球**与**开机自启动**、**单实例保护**与**托盘新版本提醒**（Build 13）。
+
+> Windows 新版采用 **WPF 重构**（`wpf/`，现代界面、悬浮球/班级小窗/托盘，解压即用）；
+> 经典 WinForms 版（`desktop/`，Setup 安装版）保留可用，不再演进。
 
 - 📥 下载页：<https://lr.yibianhui.cn/>
 - 📋 开发记录：[docs/CHANGELOG.md](docs/CHANGELOG.md)
@@ -23,7 +26,7 @@
 - **桌面悬浮球**（简约单色）：置顶小圆球，单击立即抽一人；独立于主窗口常驻，
   拖动移位并记忆，右键菜单速控；抽中结果球面显示（单人显姓名 / 多人显「N 人」）。
   **开机自启时只显示悬浮球**（零闪窗），单击弹出「选择班级」小窗，点选立即摇人。
-- **快捷键**：空格 = 抽一人；Ctrl+M = 连抽五人；Ctrl+R = 重置池；
+- **快捷键**（经典版）：空格 = 抽一人；Ctrl+M = 连抽五人；Ctrl+R = 重置池；
   Ctrl+E = 名单管理；Ctrl+H = 抽选记录；Ctrl+U = 版本与更新；Ctrl+V = 重播结果。
 
 ### 托盘与关闭
@@ -137,3 +140,16 @@ LuckyPicker/
 ## License
 
 [MIT](LICENSE) © 2026 Yibianhui
+
+### Windows 新版（WPF，主路线）
+要求：.NET 8 SDK（无 VS 亦可，命令行构建）。
+
+```bash
+cd wpf
+dotnet publish -c Release -r win-x64 --self-contained true   # 输出 self-contained 目录（免装 .NET）
+# 或 dotnet build -c Release                                # 框架依赖（本机需装 .NET 8 Desktop Runtime）
+```
+
+> 注意：`app.manifest` 请勿添加 `dpiAware` 声明——在无头 / 远程会话下会导致
+> WPF/WinUI 应用启动即 0xC0000409（BEX64）崩溃。
+
