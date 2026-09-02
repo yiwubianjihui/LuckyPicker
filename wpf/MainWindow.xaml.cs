@@ -3,6 +3,7 @@
 // ================================================================
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -511,6 +512,107 @@ namespace LuckyPickerWpf
         }
 
         // ---------- 名单管理对话框 ----------
+        // ---------------- 名单编辑（表格直接增删改） ----------------
+        void ShowRosterEditor()
+        {
+            var dlg = new Window
+            {
+                Title = "名单编辑", Width = 760, Height = 580,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
+            };
+            var root = new Grid { Margin = new Thickness(18) };
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var rows = new ObservableCollection<Student>(
+                core.allStudents.Select(x => new Student { name = x.name, classId = x.classId, gender = x.gender }));
+
+            var grid = new DataGrid
+            {
+                AutoGenerateColumns = false, CanUserAddRows = true, ItemsSource = rows,
+                HeadersVisibility = DataGridHeadersVisibility.Column, RowHeaderWidth = 0,
+                Margin = new Thickness(0, 0, 0, 10), CanUserDeleteRows = true
+            };
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = "姓名",
+                Binding = new System.Windows.Data.Binding("name"),
+                Width = new DataGridLength(1, DataGridLengthUnitType.Star)
+            });
+            var classCol = new DataGridComboBoxColumn
+            {
+                Header = "班级",
+                SelectedValueBinding = new System.Windows.Data.Binding("classId"),
+                SelectedValuePath = "Key", DisplayMemberPath = "Value",
+                Width = new DataGridLength(150)
+            };
+            classCol.ItemsSource = core.classIds
+                .Select(id => new KeyValuePair<string, string>(id, core.ClassName(id))).ToList();
+            grid.Columns.Add(classCol);
+            var genderCol = new DataGridComboBoxColumn
+            {
+                Header = "性别",
+                SelectedValueBinding = new System.Windows.Data.Binding("gender"),
+                SelectedValuePath = "Key", DisplayMemberPath = "Value",
+                Width = new DataGridLength(90)
+            };
+            genderCol.ItemsSource = new List<KeyValuePair<string, string>>
+            {
+                new KeyValuePair<string, string>("", "不限"),
+                new KeyValuePair<string, string>("male", "男"),
+                new KeyValuePair<string, string>("female", "女")
+            };
+            grid.Columns.Add(genderCol);
+            Grid.SetRow(grid, 0);
+            root.Children.Add(grid);
+
+            var tip = new TextBlock
+            {
+                Text = "双击单元格直接修改；最后一行为新增行；选中行后按 Delete 或点「删除选中行」移除。",
+                FontSize = 11.5, TextWrapping = TextWrapping.Wrap,
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(100, 116, 139)),
+                Margin = new Thickness(0, 0, 0, 10)
+            };
+            Grid.SetRow(tip, 1);
+            root.Children.Add(tip);
+
+            var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var bDel = new Button { Content = "删除选中行", Width = 110, Height = 32, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0) };
+            var bSave = new Button { Content = "保存", Width = 90, Height = 32, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0) };
+            var bCancel = new Button { Content = "取消", Width = 90, Height = 32, Cursor = Cursors.Hand };
+            bDel.Click += (s, e) => { if (grid.SelectedItem is Student st) rows.Remove(st); };
+            bSave.Click += (s, e) => { SaveRoster(rows); dlg.Close(); };
+            bCancel.Click += (s, e) => dlg.Close();
+            btns.Children.Add(bDel); btns.Children.Add(bSave); btns.Children.Add(bCancel);
+            Grid.SetRow(btns, 2);
+            root.Children.Add(btns);
+
+            dlg.Content = root;
+            dlg.ShowDialog();
+        }
+
+        void SaveRoster(IEnumerable<Student> rows)
+        {
+            try
+            {
+                var list = rows.Where(x => !string.IsNullOrWhiteSpace(x.name)).ToList();
+                var classes = new Dictionary<string, string>(core.classNames);
+                foreach (var s in list)
+                    if (!classes.ContainsKey(s.classId)) classes[s.classId] = s.classId + "班";
+                Directory.CreateDirectory(LuckyCore.DataDir());
+                File.WriteAllText(LuckyCore.DataPath(),
+                    System.Text.Json.JsonSerializer.Serialize(new DataFile { classes = classes, students = list }));
+                core.Reload();
+                InitCore();
+                HintText.Text = "√ 名单已保存（" + list.Count + " 名学生）";
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "保存失败：" + ex.Message, "名单编辑", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         void ShowEditorDialog()
         {
             var dlg = new Window
@@ -524,6 +626,7 @@ namespace LuckyPickerWpf
                 Text = "名单文件：" + LuckyCore.DataPath() + "\n保存在本机（%ProgramData%\\LuckyPicker），换机需手动备份。",
                 FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 14)
             });
+            var btnEdit = new Button { Content = "编辑名单（表格直接增删改）", Height = 36, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand };
             var btnImport = new Button { Content = "导入 Excel / CSV / JSON 名单", Height = 36, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand };
             var btnExport = new Button { Content = "导出备份（复制名单文件到桌面）", Height = 36, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand };
             var btnOpenDir = new Button { Content = "打开名单所在文件夹", Height = 36, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand };
@@ -576,6 +679,8 @@ namespace LuckyPickerWpf
             {
                 try { Directory.CreateDirectory(LuckyCore.DataDir()); System.Diagnostics.Process.Start("explorer.exe", LuckyCore.DataDir()); } catch { }
             };
+            btnEdit.Click += (s, e) => { dlg.Close(); ShowRosterEditor(); };
+            panel.Children.Add(btnEdit);
             panel.Children.Add(btnImport);
             panel.Children.Add(btnExport);
             panel.Children.Add(btnOpenDir);
