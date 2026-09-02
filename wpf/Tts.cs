@@ -660,6 +660,23 @@ namespace LuckyPickerWpf
             return "azure"; // auto：微软神经语音（Azure REST 直连）优先，失败回退百度
         }
 
+        /// <summary>依次播报多个文本（串行，每个都命中缓存，避免拼接整句导致缓存失效）。</summary>
+        public void SpeakSequence(IEnumerable<string> texts)
+        {
+            var list = texts?.Where(t => !string.IsNullOrEmpty(t)).ToList();
+            if (list == null || list.Count == 0) return;
+            Task.Run(() =>
+            {
+                foreach (var t in list)
+                {
+                    if (stopped) return;
+                    int g = ++gen;
+                    SpeakWorker(g, t);   // 同步执行到底，天然串行
+                }
+            });
+        }
+
+
         public void Speak(string text)
         {
             if (string.IsNullOrEmpty(text) || stopped) return;

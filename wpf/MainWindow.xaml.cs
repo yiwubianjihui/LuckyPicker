@@ -108,9 +108,11 @@ namespace LuckyPickerWpf
         {
             var list = core.PickMulti(5);
             if (list.Count == 0) { HintText.Text = "※ 当前无候选人"; return; }
-            await ShowMultiAsync(list.Select(x => x.name).ToList());
-            Speak(string.Join("、", list.Select(x => x.name)));
-            AddHistory(new HistoryEntry { time = Now(), text = "连抽： " + string.Join("、", list.Select(x => x.name)), classId = core.currentClassId });
+            var names = list.Select(x => x.name).ToList();
+            await ShowMultiAsync(names);
+            // 逐姓名依次播报：每个姓名各自命中缓存（拼接整句会导致缓存永不命中）
+            tts?.SpeakSequence(names);
+            AddHistory(new HistoryEntry { time = Now(), text = "连抽： " + string.Join("、", names), classId = core.currentClassId });
             RefreshPoolStats();
         }
 
