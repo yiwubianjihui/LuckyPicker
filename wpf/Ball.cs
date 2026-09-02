@@ -132,7 +132,10 @@ namespace LuckyPickerWpf
             if (!dragging && (Math.Abs(p.X - downPos.X) + Math.Abs(p.Y - downPos.Y)) > 5)
             {
                 dragging = true;
-                DragMove();
+                // DragMove 阻塞至鼠标释放（期间不再触发 MouseUp），返回后立即记忆新位置
+                try { DragMove(); } catch { }
+                dragging = false;
+                SavePosition();
             }
         }
 
