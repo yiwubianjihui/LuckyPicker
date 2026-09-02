@@ -56,10 +56,11 @@ namespace LuckyPickerWpf
             try
             {
                 tts = new TtsEngine(s => Dispatcher.Invoke(() => { try { VoiceStatusText.Text = s; } catch { } }));
-                tts.QueueWarmup(GetClassNames());
+                string st = tts.InitStatus();   // 初始化本地 SAPI 兜底（在线失败时保证能出声）
+                VoiceStatusText.Text = "♪ 语音：" + st;
+                try { tts.QueueWarmup(GetClassNames()); } catch { }
             }
             catch { }
-            VoiceStatusText.Text = "♪ 语音：在线神经语音优先 · 本地语音备用";
         }
 
         // ---------- 班级 / 筛选 ----------
@@ -246,6 +247,97 @@ namespace LuckyPickerWpf
         }
 
         // ---------- 设置菜单 ----------
+        // 设置按钮：左键点击弹出菜单（WPF ContextMenu 默认仅右键触发）
+        void OnSettingsClick(object sender, RoutedEventArgs e)
+        {
+            var ctx = SettingsBtn.ContextMenu;
+            if (ctx == null) return;
+            ctx.PlacementTarget = SettingsBtn;
+            ctx.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            ctx.IsOpen = true;
+        }
+
+        void OnMenuVoice(object sender, RoutedEventArgs e) => ShowVoiceDialog();
+
+        // ---------------- 语音设置（独立窗口） ----------------
+        void ShowVoiceDialog()
+        {
+            var dlg = new Window
+            {
+                Title = "语音设置", Width = 440, Height = 420,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
+            };
+            var panel = new StackPanel { Margin = new Thickness(22) };
+
+            // 播报来源
+            panel.Children.Add(new TextBlock { Text = "播报引擎", FontSize = 12.5, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
+            var srcCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 14) };
+            srcCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "自动（微软神经语音 → 备用）", Tag = "auto" });
+            srcCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "微软神经语音（网络）", Tag = "azure" });
+            srcCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Edge 直连语音", Tag = "edge" });
+            srcCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "百度在线语音", Tag = "baidu" });
+            srcCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "仅本地语音", Tag = "off" });
+            foreach (var it in srcCombo.Items)
+                if (it is System.Windows.Controls.ComboBoxItem ci && (string)ci.Tag == AppConfig.TtsSource) srcCombo.SelectedItem = ci;
+            if (srcCombo.SelectedIndex < 0) srcCombo.SelectedIndex = 0;
+            panel.Children.Add(srcCombo);
+
+            // 微软音色
+            panel.Children.Add(new TextBlock { Text = "微软音色（微软神经语音 / Edge 直连）", FontSize = 12.5, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
+            var voiceCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 14) };
+            var voices = new (string Name, string Id)[]
+            {
+                ("晓晓（女 · 温柔）", "zh-CN-XiaoxiaoNeural"),
+                ("晓伊（女）", "zh-CN-XiaoyiNeural"),
+                ("云希（男 · 阳光）", "zh-CN-YunxiNeural"),
+                ("云扬（男 · 新闻）", "zh-CN-YunyangNeural"),
+                ("云健（男 · 情感）", "zh-CN-YunjianNeural"),
+                ("晓辰（女 · 儿童）", "zh-CN-XiaochenNeural"),
+            };
+            foreach (var (nm, id) in voices)
+                voiceCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = nm, Tag = id });
+            foreach (var it in voiceCombo.Items)
+                if (it is System.Windows.Controls.ComboBoxItem ci && (string)ci.Tag == AppConfig.TtsVoice) voiceCombo.SelectedItem = it;
+            if (voiceCombo.SelectedIndex < 0) voiceCombo.SelectedIndex = 0;
+            panel.Children.Add(voiceCombo);
+
+            var hint = new TextBlock
+            {
+                Text = "选择后立即生效。网络引擎需要联网；无网络时自动使用本地语音。",
+                FontSize = 11, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(100, 116, 139)),
+                TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12)
+            };
+            panel.Children.Add(hint);
+
+            var btnTest = new Button { Content = "试听语音", Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 0, 8) };
+            var btnClose = new Button { Content = "关闭", Height = 36, Cursor = Cursors.Hand };
+            btnTest.Click += (s, e) =>
+            {
+                ApplyVoice(srcCombo, voiceCombo);
+                Speak("欢迎使用 YBH 幸运摇人器");
+            };
+            btnClose.Click += (s, e) => dlg.Close();
+            var row = new StackPanel { Orientation = Orientation.Horizontal };
+            row.Children.Add(btnTest); btnTest.Margin = new Thickness(0, 0, 10, 0);
+            row.Children.Add(btnClose);
+            panel.Children.Add(row);
+
+            dlg.Content = panel;
+            dlg.ShowDialog();
+        }
+
+        void ApplyVoice(ComboBox srcCombo, ComboBox voiceCombo)
+        {
+            if (srcCombo.SelectedItem is System.Windows.Controls.ComboBoxItem s && s.Tag is string st) AppConfig.TtsSource = st;
+            if (voiceCombo.SelectedItem is System.Windows.Controls.ComboBoxItem v && v.Tag is string vt) AppConfig.TtsVoice = vt;
+            AppConfig.Save();
+            try { tts?.Dispose(); } catch { }
+            tts = new TtsEngine(msg => Dispatcher.Invoke(() => { try { VoiceStatusText.Text = msg; } catch { } }));
+            string status = tts.InitStatus();
+            VoiceStatusText.Text = "♪ 语音：" + status;
+            try { tts.QueueWarmup(GetClassNames()); } catch { }
+        }
+
         void OnMenuEditor(object sender, RoutedEventArgs e) => ShowEditorDialog();
         void OnMenuHistory(object sender, RoutedEventArgs e) => ShowHistoryDialog();
         void OnMenuAbout(object sender, RoutedEventArgs e) => ShowAboutDialog();

@@ -22,7 +22,7 @@
             <StackPanel>
                 <TextBlock x:Name="TitleText" Text="YBH幸运摇人器" FontSize="28" FontWeight="Bold"
                            Foreground="#2563EB" />
-                <TextBlock x:Name="SubText" Text="智能抽人 · 不重复 · 屏蔽 · 连抽 · 语音播报 · 26H2 Build 13"
+                <TextBlock x:Name="SubText" Text="YBH幸运摇人器 · 26H2 Build 13 · 班级随机摇人"
                            FontSize="12" Foreground="#64748B" Margin="0,4,0,0" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,4,0,0">
@@ -30,9 +30,10 @@
                     <TextBlock x:Name="ClassBadgeText" Text="● 当前班级：-" FontSize="12"
                                Foreground="#2C5282" VerticalAlignment="Center" />
                 </Border>
-                <Button x:Name="SettingsBtn" Content="设置 ▾" Padding="14,6">
+                <Button x:Name="SettingsBtn" Content="设置" Padding="14,6" Click="OnSettingsClick">
                     <Button.ContextMenu>
                         <ContextMenu>
+                            <MenuItem Header="语音设置" Click="OnMenuVoice" />
                             <MenuItem Header="名单管理 · 导入" Click="OnMenuEditor" />
                             <MenuItem Header="抽选记录" Click="OnMenuHistory" />
                             <MenuItem Header="版本 · 更新" Click="OnMenuAbout" />
