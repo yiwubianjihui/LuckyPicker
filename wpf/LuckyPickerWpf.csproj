@@ -12,7 +12,11 @@
     <AssemblyVersion>26.14.0.0</AssemblyVersion>
     <FileVersion>26.14.0.0</FileVersion>
     <AssemblyName>LuckyPicker</AssemblyName>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <Content Include="icon.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.Speech" Version="8.0.0" />
   </ItemGroup>

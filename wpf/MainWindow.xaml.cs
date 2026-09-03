@@ -29,6 +29,13 @@ namespace LuckyPickerWpf
         {
             App.Log("W-ctor");
             InitializeComponent();
+            try   // 窗口/任务栏图标（exe 目录随 Content 拷贝的 icon.ico）
+            {
+                string ico = System.IO.Path.Combine(AppContext.BaseDirectory, "icon.ico");
+                if (System.IO.File.Exists(ico))
+                    Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri(ico));
+            }
+            catch { }
             App.Log("W-xaml");
             InitCore();
             App.Log("W-core");
