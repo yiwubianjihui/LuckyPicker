@@ -267,6 +267,7 @@ namespace LuckyPickerWpf
         {
             var dlg = new Window
             {
+                Icon = Icon,
                 Title = "语音设置", Width = 440, Height = 420,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
             };
@@ -568,6 +569,7 @@ namespace LuckyPickerWpf
         {
             var dlg = new Window
             {
+                Icon = Icon,
                 Title = "名单编辑", Width = 760, Height = 580,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
             };
@@ -668,6 +670,7 @@ namespace LuckyPickerWpf
         {
             var dlg = new Window
             {
+                Icon = Icon,
                 Title = "名单管理", Width = 460, Height = 380,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
             };
@@ -746,6 +749,7 @@ namespace LuckyPickerWpf
             if (names == null || names.Count == 0 || tts == null) return;
             var dlg = new Window
             {
+                Icon = Icon,
                 Title = "预生成语音缓存", Width = 480, Height = 210,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this,
                 ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false
@@ -803,6 +807,7 @@ namespace LuckyPickerWpf
         {
             var dlg = new Window
             {
+                Icon = Icon,
                 Title = "抽选记录", Width = 460, Height = 420,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
             };
@@ -823,6 +828,7 @@ namespace LuckyPickerWpf
         {
             var dlg = new Window
             {
+                Icon = Icon,
                 Title = "版本与更新", Width = 460, Height = 400,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
             };
