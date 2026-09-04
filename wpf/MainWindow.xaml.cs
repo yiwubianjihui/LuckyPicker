@@ -434,10 +434,37 @@ namespace LuckyPickerWpf
             else if (ball.IsVisible) ball.Hide();
         }
 
-        void OnBallClicked()
+        // 防误触：点击悬浮球先弹出小面板（抽一人 / 显示窗口 / 选项），不直接抽取
+        void OnBallClicked() => ShowBallPanel();
+
+        void ShowBallPanel()
         {
-            if (!classChosen) { ShowClassMini(); return; }
-            DoBallPickOne();
+            var panel = new BallQuickPanel(
+                pickOne: () =>
+                {
+                    if (!classChosen) { ShowClassMini(); return; }
+                    DoBallPickOne();
+                },
+                showMain: () => ShowMainWindow(),
+                options: () =>
+                {
+                    ShowMainWindow();
+                    Dispatcher.BeginInvoke(() =>
+                    {
+                        var ctx = SettingsBtn.ContextMenu;
+                        if (ctx == null) return;
+                        ctx.PlacementTarget = SettingsBtn;
+                        ctx.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                        ctx.IsOpen = true;
+                    });
+                });
+            if (ball != null && ball.IsVisible)
+            {
+                try { panel.ShowNear(ball); return; } catch { }
+            }
+            panel.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            panel.Show();
+            panel.Activate();
         }
 
         void DoBallPickOne()

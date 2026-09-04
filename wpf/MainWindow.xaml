@@ -1,7 +1,7 @@
 <Window x:Class="LuckyPickerWpf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="YBH幸运摇人器" Height="760" Width="960"
+        Title="YBH幸运摇人器" Height="660" Width="840"
         WindowStartupLocation="CenterScreen" PreviewKeyDown="OnWindowKeyDown"
         FontFamily="Microsoft YaHei">
     <Window.Background>

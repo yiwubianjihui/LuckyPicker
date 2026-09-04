@@ -13,6 +13,8 @@
     <FileVersion>26.14.0.0</FileVersion>
     <AssemblyName>LuckyPicker</AssemblyName>
     <ApplicationIcon>icon.ico</ApplicationIcon>
+    <!-- 运行时设置 DPI 感知（不写 manifest，避免无头/远程会话的 BEX64 崩溃），解决缩放后模糊 -->
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="icon.ico" CopyToOutputDirectory="PreserveNewest" />

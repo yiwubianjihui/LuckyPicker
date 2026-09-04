@@ -75,7 +75,31 @@ namespace LuckyPickerWpf
             MouseDown += OnBallMouseDown;
             MouseMove += OnBallMouseMove;
             MouseUp += OnBallMouseUp;
+            MouseEnter += (s, e) => WakeUp();
+            MouseLeave += (s, e) => StartIdle();
             RestorePosition();
+
+            // 不活动一段时间后降低不透明度（减少视觉干扰 / 投屏常驻）
+            idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+            idleTimer.Tick += (s, e) =>
+            {
+                idleTimer.Stop();
+                if (!dragging) ballBorder.Opacity = 0.45;
+            };
+            idleTimer.Start();
+        }
+
+        DispatcherTimer idleTimer;
+
+        void WakeUp()
+        {
+            ballBorder.Opacity = 1.0;
+            if (idleTimer != null) { idleTimer.Stop(); idleTimer.Start(); }
+        }
+
+        void StartIdle()
+        {
+            if (idleTimer != null) { idleTimer.Stop(); idleTimer.Start(); }
         }
 
         void SetFace(string text, double size)
@@ -114,7 +138,29 @@ namespace LuckyPickerWpf
             Left = x; Top = y;
         }
 
-        void SavePosition() { AppConfig.BallX = (int)Left; AppConfig.BallY = (int)Top; AppConfig.Save(); }
+        void SavePosition()
+        {
+            SnapToEdgeIfNeeded();
+            AppConfig.BallX = (int)Left;
+            AppConfig.BallY = (int)Top;
+            AppConfig.Save();
+        }
+
+        /// <summary>靠边吸附：接近屏幕边缘时贴边并收进边框一部分（露出约 65%）。</summary>
+        void SnapToEdgeIfNeeded()
+        {
+            try
+            {
+                var wa = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
+                double w = Width, h = Height;
+                int margin = 28;
+                if (Left < wa.Left + margin) Left = wa.Left - w * 0.35;
+                else if (Left + w > wa.Right - margin) Left = wa.Right - w * 0.65;
+                if (Top < wa.Top + margin) Top = wa.Top;
+                else if (Top + h > wa.Bottom - margin) Top = wa.Bottom - h;
+            }
+            catch { }
+        }
 
         void OnBallMouseDown(object s, MouseButtonEventArgs e)
         {
@@ -225,3 +271,63 @@ namespace LuckyPickerWpf
         }
     }
 }
+
+
+    // ---------------- 悬浮球快捷面板（防误触：点击球先弹面板，不直接抽取） ----------------
+    public class BallQuickPanel : Window
+    {
+        const int W = 168;
+
+        public BallQuickPanel(Action pickOne, Action showMain, Action options)
+        {
+            WindowStyle = WindowStyle.None;
+            AllowsTransparency = true;
+            Background = Brushes.Transparent;
+            Topmost = true;
+            ShowInTaskbar = false;
+            ResizeMode = ResizeMode.NoResize;
+            Width = W;
+
+            var panel = new StackPanel();
+            panel.Children.Add(MakeButton("抽一人", () => { Close(); pickOne?.Invoke(); }));
+            panel.Children.Add(MakeButton("显示窗口", () => { Close(); showMain?.Invoke(); }));
+            panel.Children.Add(MakeButton("选项", () => { Close(); options?.Invoke(); }));
+
+            var card = new Border
+            {
+                Background = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(147, 197, 253)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(10, 10, 10, 10),
+                Child = panel
+            };
+            Content = card;
+            Height = 40 * 3 + 20;
+            Deactivated += (s, e) => Close();
+        }
+
+        static Button MakeButton(string text, Action onClick)
+        {
+            var b = new Button
+            {
+                Content = text, FontSize = 12.5, Height = 34, Margin = new Thickness(0, 0, 0, 6),
+                Cursor = Cursors.Hand, Background = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
+                BorderThickness = new Thickness(0)
+            };
+            b.Click += (s, e) => onClick();
+            return b;
+        }
+
+        public void ShowNear(Window anchor)
+        {
+            var wa = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
+            double x, y = Math.Max(wa.Top + 8, anchor.Top - 10);
+            if (anchor.Left - W - 10 >= wa.Left) x = anchor.Left - W - 10;
+            else x = Math.Min(anchor.Left + anchor.Width + 10, wa.Right - W - 8);
+            Left = x;
+            Top = Math.Min(y, wa.Bottom - Height - 8);
+            Show();
+            Activate();
+        }
+    }
