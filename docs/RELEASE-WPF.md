@@ -70,3 +70,29 @@ FTP：`47.238.193.61`，上传到 `/LuckyRandom/download/<文件名>`。
 ## 8. 收尾
 
 `git add -A && git commit` → `gh_api_push.py`（PROJECT_DIR=仓库根）推送。
+
+## 9. Build 15 补充经验（2026-09-04）
+
+### 版本矩阵（下载页定版）
+| 位置 | 文件 | 说明 |
+| --- | --- | --- |
+| 主推 | `LuckyPicker-win-wpf-26H2-buildN.zip` | WPF 绿色版 |
+| 选项1 | `LuckyPicker-win-setup-26H2-buildN.exe` | WPF 安装版（Program Files / 管理员 / 覆盖升级 / 卸载） |
+| 选项2/3 | Android / Linux `buildN` | 同步 bump |
+| 选项4 | `portable-26H2-build14.zip` | 经典便携（冻结在 14，不再更新；勿再打新标） |
+| 历史 | GitHub Releases | 全部旧版 |
+
+注意：经典 WinForms 版已冻结——不要再为它打新 build 标（内容与版本号必须一致）。
+
+### 发布流水线（脚本化）
+- 内部版：`E:\Files\内部版\build-internal.ps1`（Excel 名单 → publish → 打包 → 安装器 → 静默安装校验）
+- 正式版：publish → pack（交付 zip / app.zip / update.json）→ compile.ps1（安装器）→ lr（size 校验）→ Release → 线上核验（下载页 / update.json / SHA）
+
+### 再次踩过/防住的坑
+- **Release 资产脚本**：api() 函数签名必须含 hdr 参数，否则 POST 带 Content-Type 会 TypeError，表现为后续 404，极难察觉。
+- **PowerShell 5.1**：.ps1 含中文必须存 UTF-8 with BOM + CRLF；读 JSON 用 [IO.File]::ReadAllText($p, UTF8)。
+- **窗口关闭期间 Show 异常**：弹出面板类窗口一律「静态单例 + 先关旧再开新 + 回调 Dispatcher.BeginInvoke 延后」。
+- **单实例保护**：App.OnStartup 的 Mutex 检测严禁注释禁用（曾导致自启双悬浮球）；调试需要多实例时用环境变量开关而非删代码。
+- **网络抖动**：lr（阿里云海外）与 GitHub 会间歇超时——部署脚本全部带重试；GitHub 断连时先做本地任务再补推。
+- **上传后校验**：FTP 大文件必用 ftp.size() 比对；小文件批传易在长连接尾部超时，单独补传即可。
+
