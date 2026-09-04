@@ -17,7 +17,7 @@ namespace LuckyPickerWpf
 {
     public class FloatingBallWindow : Window
     {
-        const int SizePx = 92;
+        double ballSize;
         readonly Action onClicked;          // 单击（未选班级时由宿主弹小窗）
         readonly Action onPickOne;          // 右键菜单：抽一人
         readonly Action onPickMulti;        // 右键菜单：连抽五人
@@ -44,13 +44,14 @@ namespace LuckyPickerWpf
             Topmost = true;
             ShowInTaskbar = false;
             ResizeMode = ResizeMode.NoResize;
-            Width = SizePx; Height = SizePx;
+            ballSize = Math.Max(64, Math.Min(160, AppConfig.BallDiameter));
+            Width = ballSize; Height = ballSize;
             WindowStartupLocation = WindowStartupLocation.Manual;
 
             ballBorder = new Border
             {
-                Width = SizePx - 6, Height = SizePx - 6,
-                CornerRadius = new CornerRadius((SizePx - 6) / 2),
+                Width = ballSize - 6, Height = ballSize - 6,
+                CornerRadius = new CornerRadius((ballSize - 6) / 2),
                 Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
                 BorderBrush = new SolidColorBrush(Color.FromArgb(220, 235, 255, 255)),
                 BorderThickness = new Thickness(1.5),
@@ -130,9 +131,9 @@ namespace LuckyPickerWpf
         {
             var wa = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
             int x = AppConfig.BallX, y = AppConfig.BallY;
-            if (x <= -SizePx || x >= wa.Right || y <= -SizePx || y >= wa.Bottom)
+            if (x <= -ballSize || x >= wa.Right || y <= -ballSize || y >= wa.Bottom)
             {
-                x = wa.Right - SizePx - 24;
+                x = (int)(wa.Right - ballSize - 24);
                 y = wa.Top + wa.Height / 3;
             }
             Left = x; Top = y;
@@ -192,13 +193,28 @@ namespace LuckyPickerWpf
             onClicked();
         }
 
+        /// <summary>调整悬浮球大小（设置菜单调用），并按比例缩放球面文字。</summary>
+        public void SetSize(double d)
+        {
+            ballSize = Math.Max(64, Math.Min(160, d));
+            AppConfig.BallDiameter = (int)ballSize;
+            Width = ballSize; Height = ballSize;
+            ballBorder.Width = ballSize - 6;
+            ballBorder.Height = ballSize - 6;
+            ballBorder.CornerRadius = new CornerRadius((ballSize - 6) / 2);
+            if (ballBorder.Child is TextBlock tb)
+                tb.FontSize = Math.Max(13, ballSize * 0.24);
+            SavePosition();
+        }
+
         /// <summary>球面显示抽中结果：单人姓名 / 多人「N 人」。</summary>
         public void ShowPicked(string text)
         {
             if (string.IsNullOrEmpty(text)) return;
             var parts = text.Split('、');
             string show = parts.Length > 1 ? parts.Length + "人" : (parts[0].Length > 5 ? parts[0].Substring(0, 4) + "…" : parts[0]);
-            double size = show.Length <= 3 ? 17 : 14;
+            double k = ballSize / 96.0;
+            double size = (show.Length <= 3 ? 17 : 14) * k;
             SetFace(show, size);
             flashTicks = 0;
             flashTimer.Start();
@@ -276,7 +292,22 @@ namespace LuckyPickerWpf
     // ---------------- 悬浮球快捷面板（防误触：点击球先弹面板，不直接抽取） ----------------
     public class BallQuickPanel : Window
     {
-        const int W = 168;
+        const int W = 176;
+        static BallQuickPanel? current;   // 单例：避免连续开关导致的「关闭期间 Show」异常
+
+        /// <summary>显示快捷面板（若已打开则先关闭旧面板）。</summary>
+        public static void ShowPanel(Action pickOne, Action showMain, Action options, Window? anchor)
+        {
+            try { current?.Close(); } catch { }
+            current = new BallQuickPanel(pickOne, showMain, options);
+            if (anchor != null && anchor.IsVisible)
+            {
+                try { current.ShowNear(anchor); return; } catch { }
+            }
+            current.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            current.Show();
+            current.Activate();
+        }
 
         public BallQuickPanel(Action pickOne, Action showMain, Action options)
         {
@@ -289,6 +320,15 @@ namespace LuckyPickerWpf
             Width = W;
 
             var panel = new StackPanel();
+            panel.Children.Add(new TextBlock
+            {
+                Text = "YBH\n幸运摇人",
+                FontSize = 12.5, FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(30, 64, 175)),
+                TextAlignment = TextAlignment.Center,
+                Margin = new Thickness(0, 2, 0, 8),
+                LineHeight = 17
+            });
             panel.Children.Add(MakeButton("抽一人", () => { Close(); pickOne?.Invoke(); }));
             panel.Children.Add(MakeButton("显示窗口", () => { Close(); showMain?.Invoke(); }));
             panel.Children.Add(MakeButton("选项", () => { Close(); options?.Invoke(); }));
@@ -299,23 +339,30 @@ namespace LuckyPickerWpf
                 BorderBrush = new SolidColorBrush(Color.FromRgb(147, 197, 253)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(14),
-                Padding = new Thickness(10, 10, 10, 10),
+                Padding = new Thickness(10, 10, 10, 4),
                 Child = panel
             };
             Content = card;
-            Height = 40 * 3 + 20;
+            Height = 40 * 3 + 64;
             Deactivated += (s, e) => Close();
         }
 
-        static Button MakeButton(string text, Action onClick)
+        Button MakeButton(string text, Action onClick)
         {
             var b = new Button
             {
-                Content = text, FontSize = 12.5, Height = 34, Margin = new Thickness(0, 0, 0, 6),
-                Cursor = Cursors.Hand, Background = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
+                Content = text, FontSize = 12.5, Height = 34,
+                Margin = new Thickness(0, 0, 0, 6),
+                Cursor = Cursors.Hand,
+                Background = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
                 BorderThickness = new Thickness(0)
             };
-            b.Click += (s, e) => onClick();
+            b.Click += (s, e) =>
+            {
+                // 先关面板，等关闭完成后再执行回调（避免「窗口关闭期间 Show」异常）
+                Close();
+                Dispatcher.BeginInvoke(new Action(() => onClick?.Invoke()), DispatcherPriority.Background);
+            };
             return b;
         }
 

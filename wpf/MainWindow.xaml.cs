@@ -42,8 +42,13 @@ namespace LuckyPickerWpf
             InitTray();
             ListenShowEvent();
             CheckUpdateSilent();
-            classChosen = !App.BootMinimized;
+            classChosen = false;
+            Loaded += (s, e) => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { ShowClassMini(); } catch (Exception ex) { App.Log("MINI-EX: " + ex); }
+            }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             InitBall();
+            InitBallSizeMenu();
             App.Log("W-ball");
         }
 
@@ -439,7 +444,7 @@ namespace LuckyPickerWpf
 
         void ShowBallPanel()
         {
-            var panel = new BallQuickPanel(
+            BallQuickPanel.ShowPanel(
                 pickOne: () =>
                 {
                     if (!classChosen) { ShowClassMini(); return; }
@@ -457,14 +462,8 @@ namespace LuckyPickerWpf
                         ctx.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
                         ctx.IsOpen = true;
                     });
-                });
-            if (ball != null && ball.IsVisible)
-            {
-                try { panel.ShowNear(ball); return; } catch { }
-            }
-            panel.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            panel.Show();
-            panel.Activate();
+                },
+                ball);
         }
 
         void DoBallPickOne()
@@ -487,9 +486,12 @@ namespace LuckyPickerWpf
             RefreshPoolStats();
         }
 
+        ClassMiniWindow? mini;
+
         void ShowClassMini()
         {
-            var mini = new ClassMiniWindow(core.classIds, core.classNames, cid =>
+            if (mini != null && mini.IsLoaded) { mini.Activate(); return; }   // 防重入
+            mini = new ClassMiniWindow(core.classIds, core.classNames, cid =>
             {
                 core.SetClass(cid);
                 classChosen = true;
@@ -499,6 +501,28 @@ namespace LuckyPickerWpf
             });
             if (ball != null && ball.IsVisible) mini.ShowNear(ball);
             else { mini.WindowStartupLocation = WindowStartupLocation.CenterScreen; mini.Show(); }
+        }
+
+        // ---------- 悬浮球大小 ----------
+        void InitBallSizeMenu()
+        {
+            int d = Math.Max(64, Math.Min(160, AppConfig.BallDiameter));
+            MenuBallS.IsChecked = d < 88;
+            MenuBallM.IsChecked = d >= 88 && d <= 108;
+            MenuBallL.IsChecked = d > 108;
+        }
+
+        void OnBallSizeClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is System.Windows.Controls.MenuItem mi && mi.Tag != null)
+            {
+                if (int.TryParse(mi.Tag.ToString(), out int d))
+                {
+                    ball?.SetSize(d);
+                    AppConfig.Save();
+                    InitBallSizeMenu();
+                }
+            }
         }
 
         void ShowMainWindow()

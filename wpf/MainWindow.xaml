@@ -144,6 +144,11 @@
                             <Separator />
                             <MenuItem x:Name="MenuAutoStart" Header="开机自启动" IsCheckable="True" Click="OnMenuAutoStart" />
                             <MenuItem x:Name="MenuBall" Header="桌面悬浮球" IsCheckable="True" Click="OnMenuBall" />
+                            <MenuItem Header="悬浮球大小">
+                                <MenuItem x:Name="MenuBallS" Header="小（80）" Tag="80" IsCheckable="True" Click="OnBallSizeClick" />
+                                <MenuItem x:Name="MenuBallM" Header="中（96）" Tag="96" IsCheckable="True" Click="OnBallSizeClick" />
+                                <MenuItem x:Name="MenuBallL" Header="大（120）" Tag="120" IsCheckable="True" Click="OnBallSizeClick" />
+                            </MenuItem>
                             <Separator />
                             <MenuItem Header="退出程序" Click="OnMenuQuit" />
                         </ContextMenu>

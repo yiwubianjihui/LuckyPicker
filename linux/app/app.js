@@ -606,7 +606,7 @@
   function renderMain() {
     app.innerHTML =
       '<h1>YBH幸运摇人器</h1>' +
-      '<div class="sub">智能抽人 · 不重复模式 · 屏蔽 · 连抽 · 语音播报 · 26H2 Build 14</div>' +
+      '<div class="sub">智能抽人 · 不重复模式 · 屏蔽 · 连抽 · 语音播报 · 26H2 Build 15</div>' +
       '<div class="banner">' +
       '  <span class="pill" id="classBadge">● 当前班级：-</span>' +
       '  <span class="row"><button class="btn btn-ghost" id="btnEditor">名单管理</button>' +
@@ -1422,7 +1422,7 @@
     showClassModal();
   }
 
-  if (typeof window !== 'undefined') window.LuckyPicker = { Core: Core, TTS: TTS, Sha256: Sha256, version: '26H2 Build 14', showBallAgain: showBallAgain };
+  if (typeof window !== 'undefined') window.LuckyPicker = { Core: Core, TTS: TTS, Sha256: Sha256, version: '26H2 Build 15', showBallAgain: showBallAgain };
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { Core: Core, TTS: TTS, Sha256: Sha256, DEFAULT_DATA: DEFAULT_DATA };
   }
