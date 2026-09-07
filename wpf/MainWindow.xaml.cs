@@ -457,6 +457,7 @@ namespace LuckyPickerWpf
             var picked = core.PickOne();
             if (picked == null) { HintText.Text = "※ 当前无候选人"; return; }
             ball?.ShowPicked(picked.name);
+            ball?.AutoHideAfterPick();
             Speak(picked.name);
             AddHistory(new HistoryEntry { time = Now(), text = picked.name, classId = core.currentClassId });
             RefreshPoolStats();
@@ -467,6 +468,7 @@ namespace LuckyPickerWpf
             var list = core.PickMulti(5);
             if (list.Count == 0) { HintText.Text = "※ 当前无候选人"; return; }
             ball?.ShowPicked(list.Count + "人");
+            ball?.AutoHideAfterPick();
             Speak(string.Join("、", list.Select(x => x.name)));
             AddHistory(new HistoryEntry { time = Now(), text = "连抽： " + string.Join("、", list.Select(x => x.name)), classId = core.currentClassId });
             RefreshPoolStats();

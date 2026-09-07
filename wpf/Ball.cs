@@ -72,7 +72,7 @@ namespace LuckyPickerWpf
                 if (flashTicks >= 25) { flashTimer.Stop(); SetFace("摇", 22); }
             };
 
-            ContextMenu = BuildMenu();
+            MouseRightButtonUp += (s, e) => { e.Handled = true; ShowContextMenu(); };
             MouseDown += OnBallMouseDown;
             MouseMove += OnBallMouseMove;
             MouseUp += OnBallMouseUp;
@@ -108,23 +108,38 @@ namespace LuckyPickerWpf
             if (ballBorder.Child is TextBlock tb) { tb.Text = text; tb.FontSize = size; }
         }
 
-        ContextMenu BuildMenu()
+        /// <summary>右键菜单（Win11 风格现代菜单，跟随系统主题）。</summary>
+        void ShowContextMenu()
         {
-            var m = new ContextMenu();
-            MenuItem item;
-            item = new MenuItem { Header = "显示主窗口" }; item.Click += (s, e) => showMain(); m.Items.Add(item);
-            m.Items.Add(new Separator());
-            item = new MenuItem { Header = "抽一人" }; item.Click += (s, e) => onPickOne(); m.Items.Add(item);
-            item = new MenuItem { Header = "连抽五人" }; item.Click += (s, e) => onPickMulti(); m.Items.Add(item);
-            item = new MenuItem { Header = "重置候选池" }; item.Click += (s, e) => onResetPool(); m.Items.Add(item);
-            m.Items.Add(new Separator());
-            var boot = new MenuItem { Header = "开机自启动", IsCheckable = true, IsChecked = AutoStart.IsEnabled() };
-            boot.Click += (s, e) => { bool ok = AutoStart.SetEnabled(boot.IsChecked); boot.IsChecked = ok && boot.IsChecked; };
-            m.Items.Add(boot);
-            m.Items.Add(new Separator());
-            item = new MenuItem { Header = "隐藏悬浮球" }; item.Click += (s, e) => onHideSelf(); m.Items.Add(item);
-            item = new MenuItem { Header = "退出程序" }; item.Click += (s, e) => onQuit(); m.Items.Add(item);
-            return m;
+            var m = new ModernMenu(200);
+            m.AddItem("显示主窗口", () => showMain?.Invoke());
+            m.AddSeparator();
+            m.AddItem("抽一人", () => onPickOne?.Invoke());
+            m.AddItem("连抽五人", () => onPickMulti?.Invoke());
+            m.AddItem("重置候选池", () => onResetPool?.Invoke());
+            m.AddSeparator();
+            m.AddCheck("开机自启动", AutoStart.IsEnabled(), v =>
+            {
+                bool ok = AutoStart.SetEnabled(v);
+                if (!ok) { /* 设置失败时保持原状 */ }
+            });
+            m.AddCheck("固定悬浮球（连续抽签）", AppConfig.BallPinned, v =>
+            {
+                AppConfig.BallPinned = v; AppConfig.Save();
+            });
+            m.AddSeparator();
+            m.AddItem("隐藏悬浮球", () => onHideSelf?.Invoke());
+            m.AddItem("退出程序", () => onQuit?.Invoke());
+            m.Show(this);
+        }
+
+        /// <summary>抽取后自动收起（未固定时）：保留位置，仅本会话隐藏。</summary>
+        public void AutoHideAfterPick()
+        {
+            if (AppConfig.BallPinned) return;
+            var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            t.Tick += (s, e) => { t.Stop(); try { Hide(); } catch { } };
+            t.Start();
         }
 
         void RestorePosition()
