@@ -448,7 +448,7 @@ namespace LuckyPickerWpf
                 },
                 showMain: () => ShowMainWindow(),
                 pinned: AppConfig.BallPinned,
-                onPinChanged: v => { AppConfig.BallPinned = v; AppConfig.Save(); },
+                onPinChanged: v => { AppConfig.BallPinned = v; AppConfig.Save(); ball?.SetPinned(v); },
                 ball);
         }
 
@@ -841,9 +841,11 @@ namespace LuckyPickerWpf
             root.Children.Add(tip);
 
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            var bDel = new Button { Content = "删除选中行", Width = 110, Height = 32, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0) };
-            var bSave = new Button { Content = "保存", Width = 90, Height = 32, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0) };
-            var bCancel = new Button { Content = "取消", Width = 90, Height = 32, Cursor = Cursors.Hand };
+            var modernGhost2 = (Style)FindResource("ModernBtnGhost");
+            var modernMain2 = (Style)FindResource("ModernBtn");
+            var bDel = new Button { Content = "删除选中行", Width = 110, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = modernGhost2 };
+            var bSave = new Button { Content = "保存", Width = 90, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = modernMain2 };
+            var bCancel = new Button { Content = "取消", Width = 90, Height = 36, Cursor = Cursors.Hand, Style = modernGhost2 };
             bDel.Click += (s, e) => { if (grid.SelectedItem is Student st) rows.Remove(st); };
             bSave.Click += (s, e) => { SaveRoster(rows); dlg.Close(); };
             bCancel.Click += (s, e) => dlg.Close();
@@ -890,10 +892,12 @@ namespace LuckyPickerWpf
                 Text = "名单文件：" + LuckyCore.DataPath() + "\n保存在本机（%ProgramData%\\LuckyPicker），换机需手动备份。",
                 FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 14)
             });
-            var btnEdit = new Button { Content = "编辑名单（表格直接增删改）", Height = 36, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand };
-            var btnImport = new Button { Content = "导入 Excel / CSV / JSON 名单", Height = 36, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand };
-            var btnExport = new Button { Content = "导出备份（复制名单文件到桌面）", Height = 36, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand };
-            var btnOpenDir = new Button { Content = "打开名单所在文件夹", Height = 36, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand };
+            var modern = (Style)FindResource("ModernBtn");
+            var modernGhost = (Style)FindResource("ModernBtnGhost");
+            var btnEdit = new Button { Content = "编辑名单（表格直接增删改）", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modern };
+            var btnImport = new Button { Content = "导入 Excel / CSV / JSON 名单", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modern };
+            var btnExport = new Button { Content = "导出备份（复制名单文件到桌面）", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modernGhost };
+            var btnOpenDir = new Button { Content = "打开名单所在文件夹", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modernGhost };
             var status = new TextBlock { FontSize = 12, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(6, 95, 70)), TextWrapping = TextWrapping.Wrap };
 
             btnImport.Click += (s, e) =>

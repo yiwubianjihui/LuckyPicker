@@ -142,8 +142,8 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="2,18,0,0">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,26,0">
                 <TextBlock Text="班级" FontSize="13.5" Foreground="#475569" VerticalAlignment="Center" Margin="0,0,10,0" />
-                <ComboBox x:Name="ClassCombo" MinWidth="150" Height="34" VerticalContentAlignment="Center"
-                          FontSize="13" SelectionChanged="OnClassChanged" />
+                <ComboBox x:Name="ClassCombo" MinWidth="150" VerticalContentAlignment="Center"
+                          Style="{StaticResource ModernCombo}" SelectionChanged="OnClassChanged" />
                 <CheckBox x:Name="ClassDefaultChk" Content="设为默认" IsChecked="True" FontSize="12"
                           Foreground="#475569" VerticalAlignment="Center" Margin="10,0,0,0"
                           Checked="OnClassDefaultChk" Unchecked="OnClassDefaultChk" />

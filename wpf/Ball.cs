@@ -80,6 +80,8 @@ namespace LuckyPickerWpf
             MouseLeave += (s, e) => StartIdle();
             RestorePosition();
 
+            SetPinned(AppConfig.BallPinned);
+
             // 不活动一段时间后降低不透明度（减少视觉干扰 / 投屏常驻）
             idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
             idleTimer.Tick += (s, e) =>
@@ -133,13 +135,44 @@ namespace LuckyPickerWpf
             m.Show(this);
         }
 
-        /// <summary>抽取后自动收起（未固定时）：保留位置，仅本会话隐藏。</summary>
+        /// <summary>
+        /// 抽取后行为：固定时保持原位；未固定时延时贴边收起（露出约 35%，仍可点击唤回），
+        /// 不再完全消失，避免用户以为悬浮球丢失。
+        /// </summary>
         public void AutoHideAfterPick()
         {
             if (AppConfig.BallPinned) return;
             var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-            t.Tick += (s, e) => { t.Stop(); try { Hide(); } catch { } };
+            t.Tick += (s, e) => { t.Stop(); TuckToEdge(); };
             t.Start();
+        }
+
+        /// <summary>贴边收起：贴到最近的屏幕边缘并只露出一部分（保留可点击区域）。</summary>
+        public void TuckToEdge()
+        {
+            try
+            {
+                var wa = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
+                bool nearRight = Left + Width / 2 > wa.Left + wa.Width / 2;
+                Top = Math.Max(wa.Top + 8, Math.Min(Top, wa.Bottom - Height - 8));
+                Left = nearRight ? wa.Right - Width * 0.35 : wa.Left - Width * 0.65;
+                WakeUp();
+            }
+            catch { }
+        }
+
+        /// <summary>固定状态视觉标记：固定时为深色描边，未固定为浅色。</summary>
+        public void SetPinned(bool pinned)
+        {
+            try
+            {
+                ballBorder.BorderBrush = pinned
+                    ? new SolidColorBrush(Color.FromRgb(15, 23, 42))
+                    : new SolidColorBrush(Color.FromArgb(160, 235, 255, 255));
+                ballBorder.BorderThickness = new Thickness(pinned ? 2.5 : 1.5);
+                ballBorder.ToolTip = "YBH幸运摇人器" + (pinned ? "（已固定：抽完不收起）" : "（未固定：抽完自动收起）");
+            }
+            catch { }
         }
 
         void RestorePosition()
@@ -388,7 +421,7 @@ namespace LuckyPickerWpf
                 Child = panel
             };
             Content = card;
-            Height = 56 + 34 + 30 + 24 + 48;
+            SizeToContent = SizeToContent.Height;   // 自适应高度，确保所有项完整可见
             Deactivated += (s, e) => { try { Close(); } catch { } };
         }
 
