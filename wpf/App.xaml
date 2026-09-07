@@ -6,6 +6,20 @@
         <SolidColorBrush x:Key="BrandBrush" Color="#2563EB" />
         <SolidColorBrush x:Key="InkBrush" Color="#1F2B4E" />
         <SolidColorBrush x:Key="SubBrush" Color="#64748B" />
+
+        <!-- 全局清晰度默认：抗锯齿模糊（系统缩放 100%~200% 均锐利） -->
+        <Style TargetType="{x:Type Control}">
+            <Setter Property="UseLayoutRounding" Value="True" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+        </Style>
+        <Style TargetType="{x:Type TextBlock}">
+            <Setter Property="UseLayoutRounding" Value="True" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+            <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
+        </Style>
         <Style TargetType="Button" x:Key="BigActionBtn">
             <Setter Property="FontSize" Value="17" />
             <Setter Property="FontWeight" Value="Bold" />

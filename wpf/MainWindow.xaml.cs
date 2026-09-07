@@ -288,7 +288,7 @@ namespace LuckyPickerWpf
 
             // 播报来源
             panel.Children.Add(new TextBlock { Text = "播报引擎", FontSize = 12.5, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
-            var srcCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 14) };
+            var srcCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 14), Style = (Style)FindResource("ModernCombo") };
             srcCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "自动（微软神经语音 → 备用）", Tag = "auto" });
             srcCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "微软神经语音（网络）", Tag = "azure" });
             srcCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Edge 直连语音", Tag = "edge" });
@@ -301,7 +301,7 @@ namespace LuckyPickerWpf
 
             // 微软音色
             panel.Children.Add(new TextBlock { Text = "微软音色（微软神经语音 / Edge 直连）", FontSize = 12.5, FontWeight = FontWeights.Bold, Margin = new Thickness(0, 0, 0, 6) });
-            var voiceCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 14) };
+            var voiceCombo = new ComboBox { Margin = new Thickness(0, 0, 0, 14), Style = (Style)FindResource("ModernCombo") };
             var voices = new (string Name, string Id)[]
             {
                 ("晓晓（女 · 温柔）", "zh-CN-XiaoxiaoNeural"),
@@ -326,8 +326,8 @@ namespace LuckyPickerWpf
             };
             panel.Children.Add(hint);
 
-            var btnTest = new Button { Content = "试听语音", Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 0, 8) };
-            var btnClose = new Button { Content = "关闭", Height = 36, Cursor = Cursors.Hand };
+            var btnTest = new Button { Content = "试听语音", Height = 38, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("ModernBtn") };
+            var btnClose = new Button { Content = "关闭", Height = 38, Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtnGhost") };
             btnTest.Click += (s, e) =>
             {
                 ApplyVoice(srcCombo, voiceCombo);
@@ -629,10 +629,10 @@ namespace LuckyPickerWpf
 
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
             row.Children.Add(new TextBlock { Text = "编号范围", FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) });
-            var tbMin = new TextBox { Text = "1", Width = 74, Height = 34, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(8, 4, 8, 4) };
+            var tbMin = new TextBox { Text = "1", Width = 74, Height = 36, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 4, 10, 4), BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1) };
             row.Children.Add(tbMin);
             row.Children.Add(new TextBlock { Text = " ~ ", FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 10, 0) });
-            var tbMax = new TextBox { Text = "50", Width = 74, Height = 34, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(8, 4, 8, 4) };
+            var tbMax = new TextBox { Text = "50", Width = 74, Height = 36, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 4, 10, 4), BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1) };
             row.Children.Add(tbMax);
             root.Children.Add(row);
 
@@ -645,19 +645,8 @@ namespace LuckyPickerWpf
             root.Children.Add(chkNoRepeat);
 
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 20, 0, 0) };
-            var bGo = new Button
-            {
-                Content = "生成", Width = 100, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0),
-                Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
-                Foreground = new SolidColorBrush(Color.FromRgb(255, 255, 255)),
-                BorderThickness = new Thickness(0), FontSize = 13
-            };
-            var bCancel = new Button
-            {
-                Content = "取消", Width = 82, Height = 36, Cursor = Cursors.Hand, FontSize = 12.5,
-                BorderThickness = new Thickness(0),
-                Background = new SolidColorBrush(Color.FromRgb(241, 245, 249))
-            };
+            var bGo = new Button { Content = "生成", Width = 100, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("ModernBtn") };
+            var bCancel = new Button { Content = "取消", Width = 82, Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtnGhost") };
             bCancel.Click += (s, e) => dlg.Close();
             btns.Children.Add(bGo); btns.Children.Add(bCancel);
             root.Children.Add(btns);
@@ -692,19 +681,12 @@ namespace LuckyPickerWpf
         }
 
         // ---------- 托盘 ----------
+        ModernMenu? trayMenu;   // 单例 WPF 风格托盘菜单（替代 WinForms ContextMenuStrip）
         void InitTray()
         {
-            var menu = new System.Windows.Forms.ContextMenuStrip();
-            menu.Items.Add("显示主窗口", null, (s, e) => Dispatcher.Invoke(ShowMainWindow));
-            var boot = new System.Windows.Forms.ToolStripMenuItem("开机自启动") { CheckOnClick = true, Checked = AutoStart.IsEnabled() };
-            boot.Click += (s, e) => Dispatcher.Invoke(() => { AppConfig.Save(); });
-            menu.Items.Add(boot);
-            menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
-            menu.Items.Add("退出", null, (s, e) => Dispatcher.Invoke(QuitApp));
             tray = new System.Windows.Forms.NotifyIcon
             {
                 Text = AppVersion.ProductName + " · " + AppVersion.Display,
-                ContextMenuStrip = menu,
                 Visible = true
             };
             try
@@ -714,7 +696,46 @@ namespace LuckyPickerWpf
                 else tray.Icon = System.Drawing.SystemIcons.Application;
             }
             catch { tray.Icon = System.Drawing.SystemIcons.Application; }
-            tray.DoubleClick += (s, e) => Dispatcher.Invoke(ShowMainWindow);
+
+            // 左键双击显示主窗口；右键单击弹出 WPF 风格菜单（自带圆角/阴影/主题色）
+            tray.MouseDoubleClick += (s, e) => { if (e.Button == System.Windows.Forms.MouseButtons.Left) Dispatcher.Invoke(ShowMainWindow); };
+            tray.MouseClick += (s, e) =>
+            {
+                if (e.Button != System.Windows.Forms.MouseButtons.Right) return;
+                Dispatcher.BeginInvoke(() => ShowTrayMenu(e.Location));
+            };
+        }
+
+        void ShowTrayMenu(System.Drawing.Point screenPt)
+        {
+            try { trayMenu?.Close(); } catch { }
+            trayMenu = null;
+            var menu = new ModernMenu(210);
+            trayMenu = menu;
+            menu.AddItem("显示主窗口", () => { trayMenu = null; Dispatcher.Invoke(ShowMainWindow); });
+            menu.AddItem("语音设置", () => { trayMenu = null; Dispatcher.Invoke(ShowVoiceDialog); });
+            menu.AddItem("名单管理 · 导入", () => { trayMenu = null; Dispatcher.Invoke(ShowEditorDialog); });
+            menu.AddItem("版本 · 更新", () => { trayMenu = null; Dispatcher.Invoke(ShowAboutDialog); });
+            menu.AddSeparator();
+            menu.AddCheck("开机自启动", AutoStart.IsEnabled(), v => Dispatcher.Invoke(() => AutoStart.SetEnabled(v)));
+            menu.AddCheck("桌面悬浮球", AppConfig.BallVisible, v =>
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    AppConfig.BallVisible = v; AppConfig.Save();
+                    if (ball == null) return;
+                    if (v) ball.Show(); else ball.Hide();
+                });
+            });
+            menu.AddSeparator();
+            menu.AddItem("退出程序", () => { trayMenu = null; Dispatcher.Invoke(QuitApp); });
+
+            // ModernMenu 用 Popup + PlacementTarget；这里用一个隐形 anchor 控件定位到托盘坐标
+            var anchor = new System.Windows.Controls.TextBlock { Width = 0, Height = 0 };
+            // Popup 自带 PopupAnimation/Fade，但 PlacementTarget 必须在 WPF 视觉树上
+            // 简化方案：用 System.Windows.Forms.Cursor.Position 拿到屏幕坐标 → 让 ModernMenu.Show 接收一个虚拟 anchor 之后自行定位
+            // 实际我们改写 ModernMenu 内部：用 Popup.HorizontalOffset / VerticalOffset 定位
+            menu.ShowAtScreen(screenPt.X, screenPt.Y);
         }
 
         // ---------- 单实例唤起 ----------
@@ -795,7 +816,14 @@ namespace LuckyPickerWpf
             {
                 AutoGenerateColumns = false, CanUserAddRows = true, ItemsSource = rows,
                 HeadersVisibility = DataGridHeadersVisibility.Column, RowHeaderWidth = 0,
-                Margin = new Thickness(0, 0, 0, 10), CanUserDeleteRows = true
+                Margin = new Thickness(0, 0, 0, 10), CanUserDeleteRows = true,
+                RowHeight = 34, FontSize = 13,
+                GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
+                HorizontalGridLinesBrush = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
+                Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+                BorderThickness = new Thickness(1), RowBackground = Brushes.White,
+                AlternatingRowBackground = new SolidColorBrush(Color.FromRgb(250, 251, 253)),
+                UseLayoutRounding = true, SnapsToDevicePixels = true
             };
             grid.Columns.Add(new DataGridTextColumn
             {
@@ -980,8 +1008,9 @@ namespace LuckyPickerWpf
             panel.Children.Add(txt);
             var btnCancel = new Button
             {
-                Content = "取消生成", Height = 32, Width = 110, Cursor = Cursors.Hand,
-                HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0)
+                Content = "取消生成", Width = 110, Cursor = Cursors.Hand,
+                HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0),
+                Style = (Style)FindResource("ModernBtnGhost")
             };
             panel.Children.Add(btnCancel);
             dlg.Content = panel;
@@ -1030,7 +1059,7 @@ namespace LuckyPickerWpf
             var items = HistoryStore.Load().Select(h => h.time + "  " + h.text).ToList();
             if (items.Count == 0) items.Add("（暂无记录）");
             list.ItemsSource = items;
-            var btnClear = new Button { Content = "清空记录", Height = 32, Margin = new Thickness(0, 10, 0, 0), Cursor = Cursors.Hand };
+            var btnClear = new Button { Content = "清空记录", Margin = new Thickness(0, 10, 0, 0), Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtnGhost") };
             btnClear.Click += (s, e) => { HistoryStore.Clear(); items.Clear(); items.Add("（已清空）"); list.ItemsSource = items.ToList(); };
             panel.Children.Add(list);
             panel.Children.Add(btnClear);
@@ -1057,7 +1086,7 @@ namespace LuckyPickerWpf
                 Text = "更新地址：" + AppConfig.UpdateUrl, FontSize = 12, TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 12)
             };
-            var btnCheck = new Button { Content = "检查更新", Height = 36, Cursor = Cursors.Hand };
+            var btnCheck = new Button { Content = "检查更新", Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtn") };
             btnCheck.Click += async (s, e) =>
             {
                 btnCheck.IsEnabled = false;
@@ -1127,25 +1156,9 @@ namespace LuckyPickerWpf
             root.Children.Add(status);
 
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
-            var bOpen = new Button
-            {
-                Content = "打开安装程序", Width = 120, Height = 34, IsEnabled = false, Margin = new Thickness(0, 0, 10, 0),
-                Cursor = Cursors.Hand, FontSize = 12.5, BorderThickness = new Thickness(0),
-                Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
-                Foreground = new SolidColorBrush(Color.FromRgb(255, 255, 255))
-            };
-            var bRetry = new Button
-            {
-                Content = "重试", Width = 82, Height = 34, Cursor = Cursors.Hand, FontSize = 12.5,
-                BorderThickness = new Thickness(0), Margin = new Thickness(0, 0, 10, 0),
-                Background = new SolidColorBrush(Color.FromRgb(241, 245, 249))
-            };
-            var bCancel = new Button
-            {
-                Content = "取消", Width = 82, Height = 34, Cursor = Cursors.Hand, FontSize = 12.5,
-                BorderThickness = new Thickness(0),
-                Background = new SolidColorBrush(Color.FromRgb(241, 245, 249))
-            };
+            var bOpen = new Button { Content = "打开安装程序", Width = 130, IsEnabled = false, Margin = new Thickness(0, 0, 10, 0), Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtn") };
+            var bRetry = new Button { Content = "重试", Width = 90, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("ModernBtnGhost") };
+            var bCancel = new Button { Content = "取消", Width = 90, Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtnGhost") };
             bCancel.Click += (s, e) => dlg.Close();
             bOpen.Click += (s, e) =>
             {

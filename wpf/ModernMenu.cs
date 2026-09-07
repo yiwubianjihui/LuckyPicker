@@ -145,6 +145,36 @@ namespace LuckyPickerWpf
             popup.IsOpen = true;
         }
 
+        /// <summary>在屏幕绝对坐标弹出（用于系统托盘菜单）。</summary>
+        public void ShowAtScreen(int screenX, int screenY)
+        {
+            // 用一个不可见的 Border 作为 PlacementTarget，挂到当前激活窗口的视觉树上
+            var host = new Border { Width = 1, Height = 1, Background = Brushes.Transparent };
+            if (System.Windows.Application.Current?.MainWindow != null)
+            {
+                var w = System.Windows.Application.Current.MainWindow;
+                if (w.Content is Panel p) { p.Children.Add(host); }
+                else
+                {
+                    // 单容器情况：直接挂在 Content 上
+                    var container = new System.Windows.Controls.Grid();
+                    var orig = w.Content;
+                    w.Content = null;
+                    container.Children.Add(orig as UIElement);
+                    container.Children.Add(host);
+                    w.Content = container;
+                }
+            }
+            popup.PlacementTarget = host;
+            // Popup 弹出位置（相对 PlacementTarget 的偏移）
+            var pt = System.Windows.Forms.Cursor.Position;
+            popup.HorizontalOffset = pt.X - 2;   // 与鼠标位置对齐
+            popup.VerticalOffset = pt.Y - 2;
+            popup.Placement = PlacementMode.Absolute;
+            popup.IsOpen = true;
+            popup.Closed += (s, e) => { try { (host.Parent as Panel)?.Children.Remove(host); } catch { } };
+        }
+
         public void Close() => popup.IsOpen = false;
     }
 

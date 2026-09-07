@@ -110,15 +110,19 @@ namespace LuckyPickerWpf
             if (ballBorder.Child is TextBlock tb) { tb.Text = text; tb.FontSize = size; }
         }
 
-        /// <summary>右键菜单（Win11 风格现代菜单，跟随系统主题）。</summary>
+        static ModernMenu? activeCtxMenu;   // 单例：再点球时收起
+
+        /// <summary>右键菜单（Win11 风格现代菜单，跟随系统主题）。再点切换。</summary>
         void ShowContextMenu()
         {
+            if (activeCtxMenu != null) { try { activeCtxMenu.Close(); } catch { } activeCtxMenu = null; return; }
             var m = new ModernMenu(200);
-            m.AddItem("显示主窗口", () => showMain?.Invoke());
+            activeCtxMenu = m;
+            m.AddItem("显示主窗口", () => { activeCtxMenu = null; showMain?.Invoke(); });
             m.AddSeparator();
-            m.AddItem("抽一人", () => onPickOne?.Invoke());
-            m.AddItem("连抽五人", () => onPickMulti?.Invoke());
-            m.AddItem("重置候选池", () => onResetPool?.Invoke());
+            m.AddItem("抽一人", () => { activeCtxMenu = null; onPickOne?.Invoke(); });
+            m.AddItem("连抽五人", () => { activeCtxMenu = null; onPickMulti?.Invoke(); });
+            m.AddItem("重置候选池", () => { activeCtxMenu = null; onResetPool?.Invoke(); });
             m.AddSeparator();
             m.AddCheck("开机自启动", AutoStart.IsEnabled(), v =>
             {
@@ -128,10 +132,12 @@ namespace LuckyPickerWpf
             m.AddCheck("固定悬浮球（连续抽签）", AppConfig.BallPinned, v =>
             {
                 AppConfig.BallPinned = v; AppConfig.Save();
+                // 同步：让面板里"📌 固定"勾选刷新（如果还开着）
+                BallQuickPanel.RefreshPinState(v);
             });
             m.AddSeparator();
-            m.AddItem("隐藏悬浮球", () => onHideSelf?.Invoke());
-            m.AddItem("退出程序", () => onQuit?.Invoke());
+            m.AddItem("隐藏悬浮球", () => { activeCtxMenu = null; onHideSelf?.Invoke(); });
+            m.AddItem("退出程序", () => { activeCtxMenu = null; onQuit?.Invoke(); });
             m.Show(this);
         }
 
@@ -304,8 +310,24 @@ namespace LuckyPickerWpf
                     Content = label, FontSize = 10, FontWeight = FontWeights.Bold,
                     Height = 42, Margin = new Thickness(0, 4, 0, 0), Cursor = Cursors.Hand,
                     Background = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
-                    BorderThickness = new Thickness(0)
+                    Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+                    BorderThickness = new Thickness(0),
+                    UseLayoutRounding = true, SnapsToDevicePixels = true
                 };
+                // 圆角 + 悬停态
+                var tpl = new ControlTemplate(typeof(Button));
+                var bd = new FrameworkElementFactory(typeof(Border));
+                bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+                bd.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+                var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+                cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+                cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+                bd.AppendChild(cp);
+                tpl.VisualTree = bd;
+                var trig = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+                trig.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(219, 234, 254)), "bd"));
+                tpl.Triggers.Add(trig);
+                b.Template = tpl;
                 b.Click += (s, e) =>
                 {
                     // 先关小窗，等关闭完成后再执行回调（避免「窗口关闭期间 Show/Close」异常）
@@ -345,7 +367,6 @@ namespace LuckyPickerWpf
             try { Show(); Activate(); } catch { }
         }
     }
-}
 
 
     // ---------------- 悬浮球快捷面板（防误触：点击球先弹面板，不直接抽取） ----------------
@@ -354,10 +375,15 @@ namespace LuckyPickerWpf
         const int W = 176;
         static BallQuickPanel? current;   // 单例：避免连续开关导致的「关闭期间 Show」异常
 
-        /// <summary>显示快捷面板（若已打开则先关闭旧面板）。</summary>
+        /// <summary>显示快捷面板：已开则收起（toggle），未开则弹出。</summary>
         public static void ShowPanel(Action pickOne, Action showMain, bool pinned, Action<bool> onPinChanged, Window? anchor)
         {
-            try { current?.Close(); } catch { }
+            if (current != null && current.IsLoaded)
+            {
+                try { current.Close(); } catch { }
+                current = null;
+                return;
+            }
             current = new BallQuickPanel(pickOne, showMain, pinned, onPinChanged);
             if (anchor != null && anchor.IsVisible)
             {
@@ -365,6 +391,16 @@ namespace LuckyPickerWpf
             }
             current.WindowStartupLocation = WindowStartupLocation.CenterScreen;
             try { current.Show(); current.Activate(); } catch { }
+        }
+
+        /// <summary>外部询问：当前快捷面板是否已开。</summary>
+        public static bool IsOpen => current != null && current.IsLoaded;
+
+        /// <summary>外部命令：收到外部关闭信号（悬浮球取消勾选/被踢下线等）时收起面板。</summary>
+        public static void CloseIfOpen()
+        {
+            try { current?.Close(); } catch { }
+            current = null;
         }
 
         public BallQuickPanel(Action pickOne, Action showMain, bool pinned, Action<bool> onPinChanged)
@@ -387,17 +423,36 @@ namespace LuckyPickerWpf
                 Margin = new Thickness(0, 2, 0, 8),
                 LineHeight = 17
             });
-            // 主操作：抽一人（点击区域显著放大）
+            // 主操作：抽一人（点击区域显著放大，圆角主按钮）
             var bigBtn = new Button
             {
                 Content = "抽一人", FontSize = 15, FontWeight = FontWeights.SemiBold,
                 Height = 56, Margin = new Thickness(0, 0, 0, 10), Cursor = Cursors.Hand,
                 Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
-                Foreground = Brushes.White, BorderThickness = new Thickness(0)
+                Foreground = Brushes.White, BorderThickness = new Thickness(0),
+                UseLayoutRounding = true, SnapsToDevicePixels = true
             };
-            var bigStyle = new Style(typeof(Border));
-            bigBtn.Resources.Add(typeof(Border), bigStyle);
-            bigBtn.Click += (s, e) => { Close(); Dispatcher.BeginInvoke(new Action(() => pickOne?.Invoke()), DispatcherPriority.Background); };
+            // 圆角 + 悬停态
+            var bigTpl = new ControlTemplate(typeof(Button));
+            var bigBd = new FrameworkElementFactory(typeof(Border));
+            bigBd.Name = "bd";
+            bigBd.SetValue(Border.CornerRadiusProperty, new CornerRadius(12));
+            bigBd.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+            var bigCp = new FrameworkElementFactory(typeof(ContentPresenter));
+            bigCp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            bigCp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            bigBd.AppendChild(bigCp);
+            bigTpl.VisualTree = bigBd;
+            var bigTrig = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            bigTrig.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(29, 78, 216)), "bd"));
+            bigTpl.Triggers.Add(bigTrig);
+            bigBtn.Template = bigTpl;
+            bigBtn.Click += (s, e) =>
+            {
+                // 固定时保持菜单展开，方便连续抽签；未固定时关闭菜单（球面靠边）
+                if (!AppConfig.BallPinned) Close();
+                Dispatcher.BeginInvoke(new Action(() => pickOne?.Invoke()), DispatcherPriority.Background);
+            };
             panel.Children.Add(bigBtn);
             panel.Children.Add(MakeButton("更多功能", () => { Close(); showMain?.Invoke(); }));
 
@@ -423,6 +478,12 @@ namespace LuckyPickerWpf
             Content = card;
             SizeToContent = SizeToContent.Height;   // 自适应高度，确保所有项完整可见
             Deactivated += (s, e) => { try { Close(); } catch { } };
+            _chkPin = chkPin;   // 暴露给静态刷新方法
+        }
+        CheckBox? _chkPin;
+        public static void RefreshPinState(bool pinned)
+        {
+            try { if (current != null) current._chkPin!.IsChecked = pinned; } catch { }
         }
 
         Button MakeButton(string text, Action onClick)
@@ -433,8 +494,24 @@ namespace LuckyPickerWpf
                 Margin = new Thickness(0, 0, 0, 6),
                 Cursor = Cursors.Hand,
                 Background = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
-                BorderThickness = new Thickness(0)
+                Foreground = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
+                BorderThickness = new Thickness(0),
+                UseLayoutRounding = true, SnapsToDevicePixels = true
             };
+            // 圆角 + 悬停态（贴近 Win11）
+            var tpl = new ControlTemplate(typeof(Button));
+            var bd = new FrameworkElementFactory(typeof(Border));
+            bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+            bd.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+            var cp = new FrameworkElementFactory(typeof(ContentPresenter));
+            cp.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            cp.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            bd.AppendChild(cp);
+            tpl.VisualTree = bd;
+            var trig = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            trig.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(226, 232, 240)), "bd"));
+            tpl.Triggers.Add(trig);
+            b.Template = tpl;
             b.Click += (s, e) =>
             {
                 // 先关面板，等关闭完成后再执行回调（避免「窗口关闭期间 Show」异常）
@@ -455,3 +532,4 @@ namespace LuckyPickerWpf
             try { Show(); Activate(); } catch { }
         }
     }
+}
