@@ -252,7 +252,12 @@ namespace LuckyPickerWpf
                     Background = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
                     BorderThickness = new Thickness(0)
                 };
-                b.Click += (s, e) => { var p = onPick; Close(); p?.Invoke(cid); };
+                b.Click += (s, e) =>
+                {
+                    // 先关小窗，等关闭完成后再执行回调（避免「窗口关闭期间 Show/Close」异常）
+                    Close();
+                    Dispatcher.BeginInvoke(new Action(() => onPick?.Invoke(cid)), DispatcherPriority.Background);
+                };
                 panel.Children.Add(b);
             }
 
@@ -269,7 +274,7 @@ namespace LuckyPickerWpf
 
             int count = CountOf(ids);
             Height = 64 + count * 50;
-            Deactivated += (s, e) => Close();
+            Deactivated += (s, e) => { try { Close(); } catch { } };
         }
 
         static int CountOf(IEnumerable<string> ids) { int n = 0; foreach (var _ in ids) n++; return n; }
@@ -282,8 +287,7 @@ namespace LuckyPickerWpf
             else x = Math.Min(anchor.Left + anchor.Width + 10, wa.Right - W - 8);
             y = Math.Min(y, wa.Bottom - Height - 8);
             Left = x; Top = y;
-            Show();
-            Activate();
+            try { Show(); Activate(); } catch { }
         }
     }
 }
@@ -305,8 +309,7 @@ namespace LuckyPickerWpf
                 try { current.ShowNear(anchor); return; } catch { }
             }
             current.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-            current.Show();
-            current.Activate();
+            try { current.Show(); current.Activate(); } catch { }
         }
 
         public BallQuickPanel(Action pickOne, Action showMain, Action options)
@@ -344,7 +347,7 @@ namespace LuckyPickerWpf
             };
             Content = card;
             Height = 40 * 3 + 64;
-            Deactivated += (s, e) => Close();
+            Deactivated += (s, e) => { try { Close(); } catch { } };
         }
 
         Button MakeButton(string text, Action onClick)
@@ -374,7 +377,6 @@ namespace LuckyPickerWpf
             else x = Math.Min(anchor.Left + anchor.Width + 10, wa.Right - W - 8);
             Left = x;
             Top = Math.Min(y, wa.Bottom - Height - 8);
-            Show();
-            Activate();
+            try { Show(); Activate(); } catch { }
         }
     }

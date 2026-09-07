@@ -29,6 +29,7 @@ namespace LuckyPickerWpf
         {
             App.Log("W-ctor");
             InitializeComponent();
+            SubText.Text = "班级随机摇人 · " + AppVersion.Display;
             try   // 窗口/任务栏图标（exe 目录随 Content 拷贝的 icon.ico）
             {
                 string ico = System.IO.Path.Combine(AppContext.BaseDirectory, "icon.ico");
@@ -886,7 +887,7 @@ namespace LuckyPickerWpf
             var panel = new StackPanel { Margin = new Thickness(20) };
             panel.Children.Add(new TextBlock
             {
-                Text = "当前版本：26H2 Build 14（内部构建 14）\n更新通道：26H2\n产品：YBH幸运摇人器",
+                Text = "当前版本：" + AppVersion.Display + "\n更新通道：" + AppVersion.Channel + "\n产品：" + AppVersion.ProductName,
                 FontSize = 13, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12)
             });
             var resultBox = new TextBlock

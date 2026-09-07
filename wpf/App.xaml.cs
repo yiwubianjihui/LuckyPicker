@@ -20,6 +20,11 @@ namespace LuckyPickerWpf
             {
                 Log("UI-EX: " + ex.Exception);
                 ex.Handled = true;
+                // 窗口关闭期间的可见性/Show/Close 竞态属无害时序问题：静默忽略，不打扰用户
+                string m = ex.Exception.Message ?? "";
+                bool benign = m.Contains("窗口关闭期间") || m.Contains("cannot be visible")
+                           || m.Contains("Show、ShowDialog") || m.Contains("WindowInteropHelper");
+                if (benign) return;
                 try { System.Windows.MessageBox.Show("操作出错已忽略：\n" + ex.Exception.Message,
                     AppVersion.ProductName, System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning); }
                 catch { }
