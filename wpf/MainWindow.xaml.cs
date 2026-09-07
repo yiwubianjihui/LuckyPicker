@@ -326,17 +326,20 @@ namespace LuckyPickerWpf
             };
             panel.Children.Add(hint);
 
-            var btnTest = new Button { Content = "试听语音", Height = 38, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("ModernBtn") };
-            var btnClose = new Button { Content = "关闭", Height = 38, Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtnGhost") };
+            var btnTest = new Button { Content = "试听", Height = 38, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("ModernBtn") };
+            var btnApply = new Button { Content = "保存", Height = 38, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("ModernBtn") };
+            var btnCancel = new Button { Content = "取消", Height = 38, Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtnGhost") };
             btnTest.Click += (s, e) =>
             {
                 ApplyVoice(srcCombo, voiceCombo);
                 Speak("欢迎使用 YBH 幸运摇人器");
             };
-            btnClose.Click += (s, e) => dlg.Close();
-            var row = new StackPanel { Orientation = Orientation.Horizontal };
-            row.Children.Add(btnTest); btnTest.Margin = new Thickness(0, 0, 10, 0);
-            row.Children.Add(btnClose);
+            btnApply.Click += (s, e) => { ApplyVoice(srcCombo, voiceCombo); dlg.Close(); };
+            btnCancel.Click += (s, e) => dlg.Close();
+            // 对话框意外关闭（X / Alt+F4）→ 不保存，避免误操作
+            dlg.Closing += (s, e) => { try { if (!btnApply.IsEnabled) return; } catch { } };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            row.Children.Add(btnTest); row.Children.Add(btnApply); row.Children.Add(btnCancel);
             panel.Children.Add(row);
 
             dlg.Content = panel;
@@ -493,68 +496,36 @@ namespace LuckyPickerWpf
             else { mini.WindowStartupLocation = WindowStartupLocation.CenterScreen; mini.Show(); }
         }
 
-        // ---------- 设置菜单（Win11 风格现代菜单） ----------
-        void OnSettingsClick(object sender, RoutedEventArgs e) => BuildSettingsMenu();
+        // ---------- 设置菜单（统一设置窗口） ----------
+        SettingsWindow? settingsWin;
+        void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
 
-        void BuildSettingsMenu()
+        void OpenSettings()
         {
-            if (!AppConfig.BallVisible && ball != null) { }
-            var menu = new ModernMenu(232);
-
-            menu.AddItem("语音设置", () => ShowVoiceDialog());
-            menu.AddItem("名单管理 · 导入", () => ShowEditorDialog());
-            menu.AddItem("抽选记录", () => ShowHistoryDialog());
-            menu.AddItem("版本 · 更新", () => ShowAboutDialog());
-            menu.AddSeparator();
-
-            var itAuto = menu.AddCheck("开机自启动", AutoStart.IsEnabled(), v =>
-            {
-                AutoStart.SetEnabled(v);
-                MenuAutoStartState = v;
-            });
-            var itBall = menu.AddCheck("桌面悬浮球", AppConfig.BallVisible, v =>
-            {
-                AppConfig.BallVisible = v; AppConfig.Save();
-                if (ball == null) return;
-                if (v) ball.Show(); else ball.Hide();
-            });
-            menu.AddCheck("固定悬浮球（连续抽签）", AppConfig.BallPinned, v =>
-            {
-                AppConfig.BallPinned = v; AppConfig.Save();
-            });
-            menu.AddSeparator();
-
-            menu.AddItem("更改默认班级…", () =>
-            {
-                AppConfig.DefaultClassId = ""; AppConfig.Save();
-                classChosen = false; ShowClassMini();
-            });
-
-            // 悬浮球大小（单选）
-            int cur = AppConfig.BallDiameter;
-            var sizeItems = new List<MenuCheckItem>();
-            foreach (var kv in new[] { new[] { "小（80）", "80" }, new[] { "中（96）", "96" }, new[] { "大（120）", "120" } })
-            {
-                string label = kv[0];
-                int d = int.Parse(kv[1]);
-                MenuCheckItem item = null;
-                item = menu.AddCheck(label, Math.Abs(cur - d) < 9, v =>
-                {
-                    if (!v) return;
-                    foreach (var other in sizeItems) if (!ReferenceEquals(other, item)) other.SetChecked(false);
-                    item.SetChecked(true);
-                    ball?.SetSize(d);
-                    AppConfig.Save();
-                });
-                sizeItems.Add(item);
-            }
-
-            menu.AddSeparator();
-            menu.AddItem("退出程序", () => QuitApp());
-            menu.Show(SettingsBtn);
+            if (settingsWin != null && settingsWin.IsLoaded) { settingsWin.Activate(); return; }
+            settingsWin = new SettingsWindow(this,
+                applyVoice: ApplyVoicePublic,
+                classNames: GetClassNames,
+                refreshBall: ApplyBallVisibility,
+                showHistory: ShowHistoryDialog,
+                changeDefaultClass: () => { AppConfig.DefaultClassId = ""; AppConfig.Save(); classChosen = false; ShowClassMini(); },
+                onQuit: QuitApp,
+                showUpdateDownload: ShowUpdateDownload,
+                checkUpdateAsync: async url => await Task.Run(() => UpdateManager.Check(url)));
+            settingsWin.Show();
         }
 
-        bool MenuAutoStartState;
+        // SettingsWindow 内部需要的回调
+        public void ApplyVoicePublic()
+        {
+            // 通过反射找到最近一次 ShowVoiceDialog 内部的 srcCombo / voiceCombo？太复杂。
+            // 简化：直接读 AppConfig 中的引擎/音色，重新初始化 tts（与原 ApplyVoice 等效）
+            try { tts?.Dispose(); } catch { }
+            tts = new TtsEngine(msg => Dispatcher.Invoke(() => { try { VoiceStatusText.Text = msg; } catch { } }));
+            string status = tts.InitStatus();
+            VoiceStatusText.Text = "♪ 语音：" + status;
+            try { tts.QueueWarmup(GetClassNames()); } catch { }
+        }
 
         // ---------- 默认班级 ----------
         void RefreshComboSelection()
@@ -710,23 +681,11 @@ namespace LuckyPickerWpf
         {
             try { trayMenu?.Close(); } catch { }
             trayMenu = null;
+            // 托盘菜单简化为：显示主窗口 / 打开设置 / 退出
             var menu = new ModernMenu(210);
             trayMenu = menu;
             menu.AddItem("显示主窗口", () => { trayMenu = null; Dispatcher.Invoke(ShowMainWindow); });
-            menu.AddItem("语音设置", () => { trayMenu = null; Dispatcher.Invoke(ShowVoiceDialog); });
-            menu.AddItem("名单管理 · 导入", () => { trayMenu = null; Dispatcher.Invoke(ShowEditorDialog); });
-            menu.AddItem("版本 · 更新", () => { trayMenu = null; Dispatcher.Invoke(ShowAboutDialog); });
-            menu.AddSeparator();
-            menu.AddCheck("开机自启动", AutoStart.IsEnabled(), v => Dispatcher.Invoke(() => AutoStart.SetEnabled(v)));
-            menu.AddCheck("桌面悬浮球", AppConfig.BallVisible, v =>
-            {
-                Dispatcher.Invoke(() =>
-                {
-                    AppConfig.BallVisible = v; AppConfig.Save();
-                    if (ball == null) return;
-                    if (v) ball.Show(); else ball.Hide();
-                });
-            });
+            menu.AddItem("打开设置…", () => { trayMenu = null; Dispatcher.BeginInvoke(OpenSettings); });
             menu.AddSeparator();
             menu.AddItem("退出程序", () => { trayMenu = null; Dispatcher.Invoke(QuitApp); });
 
@@ -1051,19 +1010,32 @@ namespace LuckyPickerWpf
             var dlg = new Window
             {
                 Icon = Icon,
-                Title = "抽选记录", Width = 460, Height = 420,
+                Title = "抽选记录", Width = 460, Height = 460,
+                MinHeight = 320, MinWidth = 360,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
             };
-            var panel = new StackPanel { Margin = new Thickness(16) };
-            var list = new ListBox { Height = 320, FontSize = 12 };
+            // Grid: 上 = 列表（自适应撑满），下 = 按钮（固定 50）。避免按钮被裁掉。
+            var grid = new Grid { Margin = new Thickness(16, 16, 16, 14) };
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var list = new ListBox { FontSize = 12, BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1) };
             var items = HistoryStore.Load().Select(h => h.time + "  " + h.text).ToList();
             if (items.Count == 0) items.Add("（暂无记录）");
             list.ItemsSource = items;
-            var btnClear = new Button { Content = "清空记录", Margin = new Thickness(0, 10, 0, 0), Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtnGhost") };
+            Grid.SetRow(list, 0);
+            grid.Children.Add(list);
+
+            var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
+            var btnClear = new Button { Content = "清空记录", Width = 110, Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtnGhost") };
             btnClear.Click += (s, e) => { HistoryStore.Clear(); items.Clear(); items.Add("（已清空）"); list.ItemsSource = items.ToList(); };
-            panel.Children.Add(list);
-            panel.Children.Add(btnClear);
-            dlg.Content = panel;
+            var btnClose = new Button { Content = "关闭", Width = 90, Cursor = Cursors.Hand, Margin = new Thickness(10, 0, 0, 0), Style = (Style)FindResource("ModernBtn") };
+            btnClose.Click += (s, e) => dlg.Close();
+            btnRow.Children.Add(btnClear); btnRow.Children.Add(btnClose);
+            Grid.SetRow(btnRow, 1);
+            grid.Children.Add(btnRow);
+
+            dlg.Content = grid;
             dlg.ShowDialog();
         }
 

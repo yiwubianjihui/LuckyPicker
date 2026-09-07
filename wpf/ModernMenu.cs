@@ -145,34 +145,22 @@ namespace LuckyPickerWpf
             popup.IsOpen = true;
         }
 
-        /// <summary>在屏幕绝对坐标弹出（用于系统托盘菜单）。</summary>
+        /// <summary>在屏幕绝对坐标弹出（用于系统托盘菜单）。
+        /// 实现方式：把 Popup 的 PlacementTarget 设为 Application.Current.MainWindow（窗口左上角 = 屏幕原点），
+        /// HorizontalOffset / VerticalOffset 即屏幕像素；PlacementMode.AbsolutePoint 让 Popup 把
+        /// 这两个值当屏幕坐标解释（WPF 默认 PlacementMode.Absolute 是相对 PlacementTarget 偏移）。
+        /// </summary>
         public void ShowAtScreen(int screenX, int screenY)
         {
-            // 用一个不可见的 Border 作为 PlacementTarget，挂到当前激活窗口的视觉树上
-            var host = new Border { Width = 1, Height = 1, Background = Brushes.Transparent };
-            if (System.Windows.Application.Current?.MainWindow != null)
-            {
-                var w = System.Windows.Application.Current.MainWindow;
-                if (w.Content is Panel p) { p.Children.Add(host); }
-                else
-                {
-                    // 单容器情况：直接挂在 Content 上
-                    var container = new System.Windows.Controls.Grid();
-                    var orig = w.Content;
-                    w.Content = null;
-                    container.Children.Add(orig as UIElement);
-                    container.Children.Add(host);
-                    w.Content = container;
-                }
-            }
-            popup.PlacementTarget = host;
-            // Popup 弹出位置（相对 PlacementTarget 的偏移）
-            var pt = System.Windows.Forms.Cursor.Position;
-            popup.HorizontalOffset = pt.X - 2;   // 与鼠标位置对齐
-            popup.VerticalOffset = pt.Y - 2;
-            popup.Placement = PlacementMode.Absolute;
+            var w = System.Windows.Application.Current?.MainWindow;
+            if (w == null) { Show(new Border { Width = 1, Height = 1 }); return; }
+            // 关键：用 MainWindow 作为 PlacementTarget，PlacementMode.AbsolutePoint 把 offset 当屏幕绝对坐标
+            popup.PlacementTarget = w;
+            popup.Placement = PlacementMode.AbsolutePoint;
+            popup.HorizontalOffset = screenX;
+            popup.VerticalOffset = screenY;
             popup.IsOpen = true;
-            popup.Closed += (s, e) => { try { (host.Parent as Panel)?.Children.Remove(host); } catch { } };
+            // Popup 关闭后无需清理（MainWindow 一直在）
         }
 
         public void Close() => popup.IsOpen = false;

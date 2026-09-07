@@ -317,6 +317,7 @@ namespace LuckyPickerWpf
                 // 圆角 + 悬停态
                 var tpl = new ControlTemplate(typeof(Button));
                 var bd = new FrameworkElementFactory(typeof(Border));
+                bd.Name = "bd";
                 bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
                 bd.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
                 var cp = new FrameworkElementFactory(typeof(ContentPresenter));
@@ -501,6 +502,7 @@ namespace LuckyPickerWpf
             // 圆角 + 悬停态（贴近 Win11）
             var tpl = new ControlTemplate(typeof(Button));
             var bd = new FrameworkElementFactory(typeof(Border));
+            bd.Name = "bd";
             bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
             bd.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
             var cp = new FrameworkElementFactory(typeof(ContentPresenter));
