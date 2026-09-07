@@ -225,9 +225,9 @@ namespace LuckyPickerWpf
     public class ClassMiniWindow : Window
     {
         const int W = 236;
-        readonly Action<string> onPick;
+        readonly Action<string, bool> onPick;
 
-        public ClassMiniWindow(IEnumerable<string> ids, Dictionary<string, string> names, Action<string> pick)
+        public ClassMiniWindow(IEnumerable<string> ids, Dictionary<string, string> names, Action<string, bool> pick)
         {
             onPick = pick;
             WindowStyle = WindowStyle.None;
@@ -240,7 +240,13 @@ namespace LuckyPickerWpf
 
             var panel = new StackPanel();
             panel.Children.Add(new TextBlock { Text = "选择班级", FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) });
-            panel.Children.Add(new TextBlock { Text = "点选后立即抽取 · 点击空白处关闭", FontSize = 8, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 2, 0, 8) });
+            panel.Children.Add(new TextBlock { Text = "点选后立即抽取 · 点击空白处关闭", FontSize = 8, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 2, 0, 6) });
+            var chkDefault = new CheckBox
+            {
+                Content = "设为默认（以后启动不再询问）", IsChecked = true, FontSize = 9.5,
+                Foreground = new SolidColorBrush(Color.FromRgb(30, 64, 175)), Margin = new Thickness(0, 0, 0, 8)
+            };
+            panel.Children.Add(chkDefault);
             foreach (var id in ids)
             {
                 string cid = id;
@@ -255,8 +261,9 @@ namespace LuckyPickerWpf
                 b.Click += (s, e) =>
                 {
                     // 先关小窗，等关闭完成后再执行回调（避免「窗口关闭期间 Show/Close」异常）
+                    bool asDefault = chkDefault.IsChecked == true;
                     Close();
-                    Dispatcher.BeginInvoke(new Action(() => onPick?.Invoke(cid)), DispatcherPriority.Background);
+                    Dispatcher.BeginInvoke(new Action(() => onPick?.Invoke(cid, asDefault)), DispatcherPriority.Background);
                 };
                 panel.Children.Add(b);
             }
@@ -273,7 +280,7 @@ namespace LuckyPickerWpf
             Content = card;
 
             int count = CountOf(ids);
-            Height = 64 + count * 50;
+            Height = 64 + count * 50 + 26;
             Deactivated += (s, e) => { try { Close(); } catch { } };
         }
 
@@ -300,10 +307,10 @@ namespace LuckyPickerWpf
         static BallQuickPanel? current;   // 单例：避免连续开关导致的「关闭期间 Show」异常
 
         /// <summary>显示快捷面板（若已打开则先关闭旧面板）。</summary>
-        public static void ShowPanel(Action pickOne, Action showMain, Action options, Window? anchor)
+        public static void ShowPanel(Action pickOne, Action showMain, bool pinned, Action<bool> onPinChanged, Window? anchor)
         {
             try { current?.Close(); } catch { }
-            current = new BallQuickPanel(pickOne, showMain, options);
+            current = new BallQuickPanel(pickOne, showMain, pinned, onPinChanged);
             if (anchor != null && anchor.IsVisible)
             {
                 try { current.ShowNear(anchor); return; } catch { }
@@ -312,7 +319,7 @@ namespace LuckyPickerWpf
             try { current.Show(); current.Activate(); } catch { }
         }
 
-        public BallQuickPanel(Action pickOne, Action showMain, Action options)
+        public BallQuickPanel(Action pickOne, Action showMain, bool pinned, Action<bool> onPinChanged)
         {
             WindowStyle = WindowStyle.None;
             AllowsTransparency = true;
@@ -332,9 +339,29 @@ namespace LuckyPickerWpf
                 Margin = new Thickness(0, 2, 0, 8),
                 LineHeight = 17
             });
-            panel.Children.Add(MakeButton("抽一人", () => { Close(); pickOne?.Invoke(); }));
-            panel.Children.Add(MakeButton("显示窗口", () => { Close(); showMain?.Invoke(); }));
-            panel.Children.Add(MakeButton("选项", () => { Close(); options?.Invoke(); }));
+            // 主操作：抽一人（点击区域显著放大）
+            var bigBtn = new Button
+            {
+                Content = "抽一人", FontSize = 15, FontWeight = FontWeights.SemiBold,
+                Height = 56, Margin = new Thickness(0, 0, 0, 10), Cursor = Cursors.Hand,
+                Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+                Foreground = Brushes.White, BorderThickness = new Thickness(0)
+            };
+            var bigStyle = new Style(typeof(Border));
+            bigBtn.Resources.Add(typeof(Border), bigStyle);
+            bigBtn.Click += (s, e) => { Close(); Dispatcher.BeginInvoke(new Action(() => pickOne?.Invoke()), DispatcherPriority.Background); };
+            panel.Children.Add(bigBtn);
+            panel.Children.Add(MakeButton("更多功能", () => { Close(); showMain?.Invoke(); }));
+
+            // 固定悬浮窗（默认勾选）：勾选后「抽一人」不隐藏悬浮球，便于连续抽签
+            var chkPin = new CheckBox
+            {
+                Content = "📌 固定悬浮窗（连续抽签）", IsChecked = pinned, FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)), Margin = new Thickness(0, 6, 0, 0)
+            };
+            chkPin.Checked += (s, e) => onPinChanged?.Invoke(true);
+            chkPin.Unchecked += (s, e) => onPinChanged?.Invoke(false);
+            panel.Children.Add(chkPin);
 
             var card = new Border
             {
@@ -342,11 +369,11 @@ namespace LuckyPickerWpf
                 BorderBrush = new SolidColorBrush(Color.FromRgb(147, 197, 253)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(14),
-                Padding = new Thickness(10, 10, 10, 4),
+                Padding = new Thickness(10, 10, 10, 8),
                 Child = panel
             };
             Content = card;
-            Height = 40 * 3 + 64;
+            Height = 56 + 34 + 30 + 24 + 48;
             Deactivated += (s, e) => { try { Close(); } catch { } };
         }
 

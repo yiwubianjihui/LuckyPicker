@@ -134,26 +134,7 @@
                                Foreground="#2C5282" VerticalAlignment="Center" />
                 </Border>
                 <Button x:Name="SettingsBtn" Content="设置" Style="{StaticResource GhostBtn}"
-                        Padding="18,7" Click="OnSettingsClick">
-                    <Button.ContextMenu>
-                        <ContextMenu>
-                            <MenuItem Header="语音设置" Click="OnMenuVoice" />
-                            <MenuItem Header="名单管理 · 导入" Click="OnMenuEditor" />
-                            <MenuItem Header="抽选记录" Click="OnMenuHistory" />
-                            <MenuItem Header="版本 · 更新" Click="OnMenuAbout" />
-                            <Separator />
-                            <MenuItem x:Name="MenuAutoStart" Header="开机自启动" IsCheckable="True" Click="OnMenuAutoStart" />
-                            <MenuItem x:Name="MenuBall" Header="桌面悬浮球" IsCheckable="True" Click="OnMenuBall" />
-                            <MenuItem Header="悬浮球大小">
-                                <MenuItem x:Name="MenuBallS" Header="小（80）" Tag="80" IsCheckable="True" Click="OnBallSizeClick" />
-                                <MenuItem x:Name="MenuBallM" Header="中（96）" Tag="96" IsCheckable="True" Click="OnBallSizeClick" />
-                                <MenuItem x:Name="MenuBallL" Header="大（120）" Tag="120" IsCheckable="True" Click="OnBallSizeClick" />
-                            </MenuItem>
-                            <Separator />
-                            <MenuItem Header="退出程序" Click="OnMenuQuit" />
-                        </ContextMenu>
-                    </Button.ContextMenu>
-                </Button>
+                        Padding="18,7" Click="OnSettingsClick" />
             </StackPanel>
         </Grid>
 
@@ -161,8 +142,11 @@
         <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="2,18,0,0">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,26,0">
                 <TextBlock Text="班级" FontSize="13.5" Foreground="#475569" VerticalAlignment="Center" Margin="0,0,10,0" />
-                <ComboBox x:Name="ClassCombo" MinWidth="170" Height="34" VerticalContentAlignment="Center"
+                <ComboBox x:Name="ClassCombo" MinWidth="150" Height="34" VerticalContentAlignment="Center"
                           FontSize="13" SelectionChanged="OnClassChanged" />
+                <CheckBox x:Name="ClassDefaultChk" Content="设为默认" IsChecked="True" FontSize="12"
+                          Foreground="#475569" VerticalAlignment="Center" Margin="10,0,0,0"
+                          Checked="OnClassDefaultChk" Unchecked="OnClassDefaultChk" />
             </StackPanel>
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="性别" FontSize="13.5" Foreground="#475569" VerticalAlignment="Center" Margin="0,0,10,0" />
@@ -177,12 +161,16 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <Button x:Name="PickBtn" Grid.Column="0" Content="抽一人"
                     Style="{StaticResource BigBtn}" Margin="0,0,8,0" Click="OnPick"
                     Effect="{StaticResource CardShadow}" />
             <Button x:Name="MultiBtn" Grid.Column="1" Content="连抽五人"
-                    Style="{StaticResource BigBtn}" Margin="8,0,0,0" Click="OnMulti"
+                    Style="{StaticResource BigBtn}" Margin="4,0" Click="OnMulti"
+                    Effect="{StaticResource CardShadow}" />
+            <Button x:Name="NumBtn" Grid.Column="2" Content="随机编号"
+                    Style="{StaticResource BigBtn}" Margin="8,0,0,0" Click="OnRandomNumber"
                     Effect="{StaticResource CardShadow}" />
         </Grid>
 

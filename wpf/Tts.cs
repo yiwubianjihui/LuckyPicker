@@ -43,6 +43,8 @@ namespace LuckyPickerWpf
         public static int BallX = -1;           // 悬浮球位置（-1 表示使用默认位置）
         public static int BallY = -1;
         public static int BallDiameter = 96;    // 悬浮球直径（可在设置菜单调整）
+        public static string DefaultClassId = ""; // 默认班级（非空则启动不再询问班级选择）
+        public static bool BallPinned = true;     // 悬浮球固定（勾选后抽取不自动隐藏）
         public static string LastUpdateCheckDate = ""; // 静默检查更新的日期（yyyy-MM-dd，每日至多提醒一次）
 
         public static void Load()
@@ -61,6 +63,8 @@ namespace LuckyPickerWpf
                 if (dict.TryGetProperty("ballVisible", out var j6) && j6.ValueKind == JsonValueKind.False) BallVisible = false;
                 if (dict.TryGetProperty("ballDiameter", out var j7b) && j7b.ValueKind == JsonValueKind.Number)
                 { var v = j7b.GetInt32(); if (v >= 64 && v <= 160) BallDiameter = v; }
+                if (dict.TryGetProperty("defaultClassId", out var j7c) && j7c.ValueKind == JsonValueKind.String) DefaultClassId = j7c.GetString() ?? "";
+                if (dict.TryGetProperty("ballPinned", out var j7d) && j7d.ValueKind == JsonValueKind.False) BallPinned = false;
                 if (dict.TryGetProperty("ballX", out var j7) && j7.ValueKind == JsonValueKind.Number) BallX = j7.GetInt32();
                 if (dict.TryGetProperty("ballY", out var j8) && j8.ValueKind == JsonValueKind.Number) BallY = j8.GetInt32();
                 if (dict.TryGetProperty("lastUpdateCheckDate", out var j9) && j9.ValueKind == JsonValueKind.String) LastUpdateCheckDate = j9.GetString() ?? "";
@@ -78,6 +82,7 @@ namespace LuckyPickerWpf
                     ttsOnline = TtsOnline, ttsVoice = TtsVoice, ttsSource = TtsSource,
                     edgeBlocked = EdgeBlocked, updateUrl = UpdateUrl, ballVisible = BallVisible,
                     ballX = BallX, ballY = BallY, ballDiameter = BallDiameter,
+                    defaultClassId = DefaultClassId, ballPinned = BallPinned,
                     lastUpdateCheckDate = LastUpdateCheckDate
                 };
                 File.WriteAllText(ConfigPath, JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));

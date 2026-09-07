@@ -57,6 +57,7 @@ namespace LuckyPickerWpf
         public int LatestBuild;
         public string Channel;
         public string DownloadUrl;
+        public string SetupUrl = "";   // 安装程序直链（用于后台下载安装器）
         public string Notes;
         public string ReleaseDate;
         public bool Mandatory;

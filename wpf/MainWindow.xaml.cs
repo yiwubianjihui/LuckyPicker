@@ -7,6 +7,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -46,10 +47,22 @@ namespace LuckyPickerWpf
             classChosen = false;
             Loaded += (s, e) => Dispatcher.BeginInvoke(new Action(() =>
             {
-                try { ShowClassMini(); } catch (Exception ex) { App.Log("MINI-EX: " + ex); }
+                try
+                {
+                    if (!string.IsNullOrEmpty(AppConfig.DefaultClassId) && core.classIds.Contains(AppConfig.DefaultClassId))
+                    {
+                        core.SetClass(AppConfig.DefaultClassId);
+                        classChosen = true;
+                        RefreshComboSelection();
+                        RefreshBadge();
+                        RefreshPoolStats();
+                        return;
+                    }
+                    ShowClassMini();
+                }
+                catch (Exception ex) { App.Log("MINI-EX: " + ex); }
             }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             InitBall();
-            InitBallSizeMenu();
             App.Log("W-ball");
         }
 
@@ -84,6 +97,8 @@ namespace LuckyPickerWpf
             if (i >= 0 && i < core.classIds.Count)
             {
                 core.SetClass(core.classIds[i]);
+                if (ClassDefaultChk != null && ClassDefaultChk.IsChecked == true)
+                { AppConfig.DefaultClassId = core.classIds[i]; AppConfig.Save(); }
                 RefreshBadge(); RefreshPoolStats(); ResetResult();
             }
         }
@@ -257,14 +272,6 @@ namespace LuckyPickerWpf
 
         // ---------- 设置菜单 ----------
         // 设置按钮：左键点击弹出菜单（WPF ContextMenu 默认仅右键触发）
-        void OnSettingsClick(object sender, RoutedEventArgs e)
-        {
-            var ctx = SettingsBtn.ContextMenu;
-            if (ctx == null) return;
-            ctx.PlacementTarget = SettingsBtn;
-            ctx.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-            ctx.IsOpen = true;
-        }
 
         void OnMenuVoice(object sender, RoutedEventArgs e) => ShowVoiceDialog();
 
@@ -396,18 +403,6 @@ namespace LuckyPickerWpf
         void OnMenuHistory(object sender, RoutedEventArgs e) => ShowHistoryDialog();
         void OnMenuAbout(object sender, RoutedEventArgs e) => ShowAboutDialog();
 
-        void OnMenuAutoStart(object sender, RoutedEventArgs e)
-        {
-            bool ok = AutoStart.SetEnabled(MenuAutoStart.IsChecked);
-            if (!ok) MenuAutoStart.IsChecked = AutoStart.IsEnabled();
-        }
-
-        void OnMenuBall(object sender, RoutedEventArgs e)
-        {
-            AppConfig.BallVisible = MenuBall.IsChecked;
-            AppConfig.Save();
-            ApplyBallVisibility();
-        }
 
         void OnMenuQuit(object sender, RoutedEventArgs e) => QuitApp();
 
@@ -452,18 +447,8 @@ namespace LuckyPickerWpf
                     DoBallPickOne();
                 },
                 showMain: () => ShowMainWindow(),
-                options: () =>
-                {
-                    ShowMainWindow();
-                    Dispatcher.BeginInvoke(() =>
-                    {
-                        var ctx = SettingsBtn.ContextMenu;
-                        if (ctx == null) return;
-                        ctx.PlacementTarget = SettingsBtn;
-                        ctx.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-                        ctx.IsOpen = true;
-                    });
-                },
+                pinned: AppConfig.BallPinned,
+                onPinChanged: v => { AppConfig.BallPinned = v; AppConfig.Save(); },
                 ball);
         }
 
@@ -492,11 +477,13 @@ namespace LuckyPickerWpf
         void ShowClassMini()
         {
             if (mini != null && mini.IsLoaded) { mini.Activate(); return; }   // 防重入
-            mini = new ClassMiniWindow(core.classIds, core.classNames, cid =>
+            mini = new ClassMiniWindow(core.classIds, core.classNames, (cid, asDefault) =>
             {
                 core.SetClass(cid);
                 classChosen = true;
+                if (asDefault) { AppConfig.DefaultClassId = cid; AppConfig.Save(); }
                 RefreshBadge();
+                RefreshComboSelection();
                 RefreshPoolStats();
                 DoBallPickOne();
             });
@@ -504,27 +491,196 @@ namespace LuckyPickerWpf
             else { mini.WindowStartupLocation = WindowStartupLocation.CenterScreen; mini.Show(); }
         }
 
-        // ---------- 悬浮球大小 ----------
-        void InitBallSizeMenu()
-        {
-            int d = Math.Max(64, Math.Min(160, AppConfig.BallDiameter));
-            MenuBallS.IsChecked = d < 88;
-            MenuBallM.IsChecked = d >= 88 && d <= 108;
-            MenuBallL.IsChecked = d > 108;
-        }
+        // ---------- 设置菜单（Win11 风格现代菜单） ----------
+        void OnSettingsClick(object sender, RoutedEventArgs e) => BuildSettingsMenu();
 
-        void OnBallSizeClick(object sender, RoutedEventArgs e)
+        void BuildSettingsMenu()
         {
-            if (sender is System.Windows.Controls.MenuItem mi && mi.Tag != null)
+            if (!AppConfig.BallVisible && ball != null) { }
+            var menu = new ModernMenu(232);
+
+            menu.AddItem("语音设置", () => ShowVoiceDialog());
+            menu.AddItem("名单管理 · 导入", () => ShowEditorDialog());
+            menu.AddItem("抽选记录", () => ShowHistoryDialog());
+            menu.AddItem("版本 · 更新", () => ShowAboutDialog());
+            menu.AddSeparator();
+
+            var itAuto = menu.AddCheck("开机自启动", AutoStart.IsEnabled(), v =>
             {
-                if (int.TryParse(mi.Tag.ToString(), out int d))
+                AutoStart.SetEnabled(v);
+                MenuAutoStartState = v;
+            });
+            var itBall = menu.AddCheck("桌面悬浮球", AppConfig.BallVisible, v =>
+            {
+                AppConfig.BallVisible = v; AppConfig.Save();
+                if (ball == null) return;
+                if (v) ball.Show(); else ball.Hide();
+            });
+            menu.AddCheck("固定悬浮球（连续抽签）", AppConfig.BallPinned, v =>
+            {
+                AppConfig.BallPinned = v; AppConfig.Save();
+            });
+            menu.AddSeparator();
+
+            menu.AddItem("更改默认班级…", () =>
+            {
+                AppConfig.DefaultClassId = ""; AppConfig.Save();
+                classChosen = false; ShowClassMini();
+            });
+
+            // 悬浮球大小（单选）
+            int cur = AppConfig.BallDiameter;
+            var sizeItems = new List<MenuCheckItem>();
+            foreach (var kv in new[] { new[] { "小（80）", "80" }, new[] { "中（96）", "96" }, new[] { "大（120）", "120" } })
+            {
+                string label = kv[0];
+                int d = int.Parse(kv[1]);
+                MenuCheckItem item = null;
+                item = menu.AddCheck(label, Math.Abs(cur - d) < 9, v =>
                 {
+                    if (!v) return;
+                    foreach (var other in sizeItems) if (!ReferenceEquals(other, item)) other.SetChecked(false);
+                    item.SetChecked(true);
                     ball?.SetSize(d);
                     AppConfig.Save();
-                    InitBallSizeMenu();
-                }
+                });
+                sizeItems.Add(item);
+            }
+
+            menu.AddSeparator();
+            menu.AddItem("退出程序", () => QuitApp());
+            menu.Show(SettingsBtn);
+        }
+
+        bool MenuAutoStartState;
+
+        // ---------- 默认班级 ----------
+        void RefreshComboSelection()
+        {
+            int i = core.classIds.IndexOf(core.currentClassId);
+            if (i >= 0) ClassCombo.SelectedIndex = i;
+        }
+
+        void OnClassDefaultChk(object sender, RoutedEventArgs e)
+        {
+            if (ClassDefaultChk.IsChecked == true && ClassCombo.SelectedIndex >= 0)
+            {
+                AppConfig.DefaultClassId = core.currentClassId;
+                AppConfig.Save();
             }
         }
+
+        void OnMenuChangeDefaultClass(object sender, RoutedEventArgs e)
+        {
+            AppConfig.DefaultClassId = "";
+            AppConfig.Save();
+            classChosen = false;
+            ShowClassMini();
+        }
+
+        // ---------- 随机编号生成器 ----------
+        static readonly Random rndShared = new();
+        readonly List<int> numPool = new();
+        string numPoolKey = "";
+
+        int DrawNumber(int lo, int hi, bool noRepeat)
+        {
+            string key = lo + "-" + hi;
+            if (numPoolKey != key) { numPoolKey = key; numPool.Clear(); }
+            if (!noRepeat) return rndShared.Next(lo, hi + 1);
+            if (numPool.Count == 0)
+                for (int i = lo; i <= hi; i++) numPool.Add(i);
+            int idx = rndShared.Next(numPool.Count);
+            int v = numPool[idx];
+            numPool.RemoveAt(idx);
+            return v;
+        }
+
+        void ShowNumberResult(int n, int lo, int hi)
+        {
+            string text = n.ToString();
+            PickedName.Text = text;
+            MultiPanel.Visibility = Visibility.Collapsed;
+            HintText.Text = "√ 已生成编号：" + text + "（范围 " + lo + " ~ " + hi + "）";
+            ball?.ShowPicked(text);
+            Speak(text);
+            AddHistory(new HistoryEntry { time = Now(), text = "编号：" + text + "（范围 " + lo + "~" + hi + "）", classId = core.currentClassId });
+        }
+
+        void OnRandomNumber(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Window
+            {
+                Title = "随机编号", Width = 372, Height = 258,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this,
+                ResizeMode = ResizeMode.NoResize,
+                Background = new SolidColorBrush(Color.FromRgb(255, 255, 255))
+            };
+            var root = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
+            root.Children.Add(new TextBlock
+            {
+                Text = "随机编号（未导入名单时抽取编号）",
+                FontSize = 13.5, FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+                Margin = new Thickness(0, 0, 0, 16)
+            });
+
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
+            row.Children.Add(new TextBlock { Text = "编号范围", FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) });
+            var tbMin = new TextBox { Text = "1", Width = 74, Height = 34, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(8, 4, 8, 4) };
+            row.Children.Add(tbMin);
+            row.Children.Add(new TextBlock { Text = " ~ ", FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 10, 0) });
+            var tbMax = new TextBox { Text = "50", Width = 74, Height = 34, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(8, 4, 8, 4) };
+            row.Children.Add(tbMax);
+            root.Children.Add(row);
+
+            var chkNoRepeat = new CheckBox
+            {
+                Content = "不重复（抽过的编号不再出现）", IsChecked = true, FontSize = 12,
+                Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)),
+                Margin = new Thickness(0, 10, 0, 0)
+            };
+            root.Children.Add(chkNoRepeat);
+
+            var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 20, 0, 0) };
+            var bGo = new Button
+            {
+                Content = "生成", Width = 100, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0),
+                Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 255, 255)),
+                BorderThickness = new Thickness(0), FontSize = 13
+            };
+            var bCancel = new Button
+            {
+                Content = "取消", Width = 82, Height = 36, Cursor = Cursors.Hand, FontSize = 12.5,
+                BorderThickness = new Thickness(0),
+                Background = new SolidColorBrush(Color.FromRgb(241, 245, 249))
+            };
+            bCancel.Click += (s, e) => dlg.Close();
+            btns.Children.Add(bGo); btns.Children.Add(bCancel);
+            root.Children.Add(btns);
+
+            bGo.Click += (s, e) =>
+            {
+                if (!int.TryParse(tbMin.Text.Trim(), out int lo) || !int.TryParse(tbMax.Text.Trim(), out int hi))
+                { MessageBox.Show(this, "请输入有效的数字范围。", "随机编号", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+                if (lo > hi) { int t = lo; lo = hi; hi = t; }
+                int n = DrawNumber(lo, hi, chkNoRepeat.IsChecked == true);
+                if (n < 0)
+                {
+                    MessageBox.Show(this, "该范围内编号已抽完，请调整范围或关闭「不重复」。", "随机编号", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+                ShowNumberResult(n, lo, hi);
+                dlg.Close();
+            };
+
+            dlg.Content = root;
+            dlg.ShowDialog();
+        }
+
+        // ---------- 悬浮球大小 ----------
+
 
         void ShowMainWindow()
         {
@@ -539,7 +695,7 @@ namespace LuckyPickerWpf
             var menu = new System.Windows.Forms.ContextMenuStrip();
             menu.Items.Add("显示主窗口", null, (s, e) => Dispatcher.Invoke(ShowMainWindow));
             var boot = new System.Windows.Forms.ToolStripMenuItem("开机自启动") { CheckOnClick = true, Checked = AutoStart.IsEnabled() };
-            boot.Click += (s, e) => Dispatcher.Invoke(() => { MenuAutoStart.IsChecked = AutoStart.IsEnabled(); });
+            boot.Click += (s, e) => Dispatcher.Invoke(() => { AppConfig.Save(); });
             menu.Items.Add(boot);
             menu.Items.Add(new System.Windows.Forms.ToolStripSeparator());
             menu.Items.Add("退出", null, (s, e) => Dispatcher.Invoke(QuitApp));
@@ -915,19 +1071,143 @@ namespace LuckyPickerWpf
                 txt += "\n\n" + (res.HasUpdate ? "★ 发现新版本！可在官网下载：\n" + res.DownloadUrl : "✓ 当前已是最新版本");
                 resultBox.Text = txt;
                 resultBox.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(51, 65, 85));
-                if (res.HasUpdate && !string.IsNullOrEmpty(res.DownloadUrl))
+                if (res.HasUpdate)
                 {
-                    var ask = MessageBox.Show(this, "发现新版本 " + res.LatestVersion + "\n是否打开官网下载页？",
+                    var ask = MessageBox.Show(this,
+                        "发现新版本 " + res.LatestVersion + "\n\n是否现在下载安装程序？（后台下载，完成后可手动安装）",
                         "发现新版本", MessageBoxButton.YesNo, MessageBoxImage.Information);
-                    if (ask == MessageBoxResult.Yes)
-                    {
-                        try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(res.DownloadUrl) { UseShellExecute = true }); } catch { }
-                    }
+                    if (ask == MessageBoxResult.Yes) ShowUpdateDownload(res);
                 }
             };
             panel.Children.Add(resultBox);
             panel.Children.Add(btnCheck);
             dlg.Content = panel;
+            dlg.ShowDialog();
+        }
+
+        // ---------- 更新：后台下载安装器 ----------
+        void ShowUpdateDownload(UpdateResult res)
+        {
+            string url = !string.IsNullOrEmpty(res.SetupUrl) ? res.SetupUrl : res.DownloadUrl;
+            if (string.IsNullOrEmpty(url))
+            {
+                MessageBox.Show(this, "未获取到安装程序下载地址，请到官网下载。", "更新", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LuckyPicker", "updates");
+            Directory.CreateDirectory(dir);
+            string file = Path.Combine(dir, "LuckyPicker-Setup-" + (res.LatestBuild > 0 ? res.LatestBuild.ToString() : "latest") + ".exe");
+
+            var dlg = new Window
+            {
+                Title = "下载更新 " + res.LatestVersion, Width = 420, Height = 210,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this,
+                ResizeMode = ResizeMode.NoResize,
+                Background = new SolidColorBrush(Color.FromRgb(255, 255, 255))
+            };
+            var root = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
+            root.Children.Add(new TextBlock
+            {
+                Text = "正在后台下载安装程序…", FontSize = 13.5, FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)), Margin = new Thickness(0, 0, 0, 14)
+            });
+            var bar = new ProgressBar { Height = 12, Minimum = 0, Maximum = 100, Value = 0 };
+            root.Children.Add(bar);
+            var status = new TextBlock
+            {
+                Text = "准备中…", FontSize = 12, Margin = new Thickness(0, 10, 0, 0),
+                Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139))
+            };
+            root.Children.Add(status);
+
+            var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 18, 0, 0) };
+            var bOpen = new Button
+            {
+                Content = "打开安装程序", Width = 120, Height = 34, IsEnabled = false, Margin = new Thickness(0, 0, 10, 0),
+                Cursor = Cursors.Hand, FontSize = 12.5, BorderThickness = new Thickness(0),
+                Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+                Foreground = new SolidColorBrush(Color.FromRgb(255, 255, 255))
+            };
+            var bRetry = new Button
+            {
+                Content = "重试", Width = 82, Height = 34, Cursor = Cursors.Hand, FontSize = 12.5,
+                BorderThickness = new Thickness(0), Margin = new Thickness(0, 0, 10, 0),
+                Background = new SolidColorBrush(Color.FromRgb(241, 245, 249))
+            };
+            var bCancel = new Button
+            {
+                Content = "取消", Width = 82, Height = 34, Cursor = Cursors.Hand, FontSize = 12.5,
+                BorderThickness = new Thickness(0),
+                Background = new SolidColorBrush(Color.FromRgb(241, 245, 249))
+            };
+            bCancel.Click += (s, e) => dlg.Close();
+            bOpen.Click += (s, e) =>
+            {
+                try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file) { UseShellExecute = true }); }
+                catch { }
+                dlg.Close();
+            };
+            btns.Children.Add(bOpen); btns.Children.Add(bRetry); btns.Children.Add(bCancel);
+            root.Children.Add(btns);
+
+            var cts = new System.Threading.CancellationTokenSource();
+            bRetry.Click += async (s, e) => { await RunDownload(); };
+            bRetry.IsEnabled = false;
+
+            async System.Threading.Tasks.Task RunDownload()
+            {
+                bRetry.IsEnabled = false;
+                bOpen.IsEnabled = false;
+                bar.Value = 0;
+                status.Text = "正在下载…";
+                status.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+                cts = new System.Threading.CancellationTokenSource();
+                try
+                {
+                    using var http = new System.Net.Http.HttpClient();
+                    http.Timeout = TimeSpan.FromMinutes(20);
+                    using var resp = await http.GetAsync(url, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cts.Token);
+                    resp.EnsureSuccessStatusCode();
+                    long? total = resp.Content.Headers.ContentLength;
+                    using var src = await resp.Content.ReadAsStreamAsync();
+                    using var fs = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.None);
+                    var buf = new byte[81920];
+                    long read = 0;
+                    int n;
+                    while ((n = await src.ReadAsync(buf, 0, buf.Length, cts.Token)) > 0)
+                    {
+                        await fs.WriteAsync(buf, 0, n, cts.Token);
+                        read += n;
+                        if (total.HasValue && total.Value > 0)
+                        {
+                            double pct = read * 100.0 / total.Value;
+                            bar.Value = pct;
+                            status.Text = string.Format("已下载 {0:F1} / {1:F1} MB（{2:F0}%）",
+                                read / 1048576.0, total.Value / 1048576.0, pct);
+                        }
+                        else
+                        {
+                            status.Text = string.Format("已下载 {0:F1} MB", read / 1048576.0);
+                        }
+                    }
+                    bar.Value = 100;
+                    status.Text = "下载完成，可点击「打开安装程序」安装。";
+                    status.Foreground = new SolidColorBrush(Color.FromRgb(6, 122, 91));
+                    bOpen.IsEnabled = true;
+                    bRetry.IsEnabled = true;
+                    // 下载完成后自动打开安装程序供手动安装
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file) { UseShellExecute = true }); } catch { }
+                }
+                catch (Exception ex)
+                {
+                    status.Text = "下载失败：" + ex.Message + "\\n可点击「重试」继续。";
+                    status.Foreground = new SolidColorBrush(Color.FromRgb(220, 38, 38));
+                    bRetry.IsEnabled = true;
+                }
+            }
+
+            dlg.Content = root;
+            dlg.Loaded += async (s, e) => await RunDownload();
             dlg.ShowDialog();
         }
 
