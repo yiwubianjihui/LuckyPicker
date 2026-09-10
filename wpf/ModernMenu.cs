@@ -145,22 +145,66 @@ namespace LuckyPickerWpf
             popup.IsOpen = true;
         }
 
-        /// <summary>在屏幕绝对坐标弹出（用于系统托盘菜单）。
-        /// 实现方式：把 Popup 的 PlacementTarget 设为 Application.Current.MainWindow（窗口左上角 = 屏幕原点），
-        /// HorizontalOffset / VerticalOffset 即屏幕像素；PlacementMode.AbsolutePoint 让 Popup 把
-        /// 这两个值当屏幕坐标解释（WPF 默认 PlacementMode.Absolute 是相对 PlacementTarget 偏移）。
+        /// <summary>最近一次 ShowAtScreen 实际使用的 DIP 坐标（供自检/诊断使用）。</summary>
+        public Point? LastScreenOffset { get; private set; }
+
+        /// <summary>
+        /// 在屏幕绝对坐标弹出（用于系统托盘菜单）。
+        ///
+        /// 根因说明：NotifyIcon.MouseClick 的 e.Location 是**设备像素**，而 WPF 的
+        /// Popup.HorizontalOffset / VerticalOffset 是**设备无关单位（DIP）**。
+        /// 在非 100% 缩放（如 125% / 150%）下两者相差一个缩放系数，直接赋值就会错位。
+        /// 另外托盘在屏幕底部，向下弹出会超出工作区，需自动翻转到上方。
         /// </summary>
-        public void ShowAtScreen(int screenX, int screenY)
+        /// <param name="screenX">设备像素 X（屏幕坐标）</param>
+        /// <param name="screenY">设备像素 Y（屏幕坐标）</param>
+        public void ShowAtScreen(double screenX, double screenY)
         {
             var w = System.Windows.Application.Current?.MainWindow;
-            if (w == null) { Show(new Border { Width = 1, Height = 1 }); return; }
-            // 关键：用 MainWindow 作为 PlacementTarget，PlacementMode.AbsolutePoint 把 offset 当屏幕绝对坐标
+            if (w == null) return;
+
+            // 目标屏幕的工作区（设备像素）
+            var wa = System.Windows.Forms.Screen.FromPoint(
+                new System.Drawing.Point((int)screenX, (int)screenY)).WorkingArea;
+
+            // 设备像素 → DIP
+            var src = PresentationSource.FromVisual(w);
+            Matrix toDip = Matrix.Identity;
+            if (src?.CompositionTarget != null) toDip = src.CompositionTarget.TransformFromDevice;
+
+            double px = screenX, py = screenY;
+            double workLeft = wa.Left, workTop = wa.Top, workRight = wa.Right, workBottom = wa.Bottom;
+            if (!toDip.IsIdentity)
+            {
+                var p = toDip.Transform(new Point(screenX, screenY));
+                px = p.X; py = p.Y;
+                var tl = toDip.Transform(new Point(wa.Left, wa.Top));
+                var br = toDip.Transform(new Point(wa.Right, wa.Bottom));
+                workLeft = tl.X; workTop = tl.Y; workRight = br.X; workBottom = br.Y;
+            }
+
+            // 先测量实际尺寸，再决定向上还是向下、是否需要左移
+            card.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double cw = card.DesiredSize.Width, ch = card.DesiredSize.Height;
+            if (double.IsNaN(cw) || cw <= 0) cw = card.MinWidth;
+            if (double.IsNaN(ch) || ch <= 0) ch = 120;
+
+            // 水平：右对齐鼠标，超出右边界则左移
+            double x = px;
+            if (x + cw > workRight - 4) x = workRight - cw - 4;
+            if (x < workLeft + 4) x = workLeft + 4;
+
+            // 垂直：托盘一般在底部 → 优先向上弹出
+            double y = py - ch - 8;
+            if (y < workTop + 4) y = Math.Min(py + 8, workBottom - ch - 4);
+            if (y < workTop + 4) y = workTop + 4;
+
             popup.PlacementTarget = w;
             popup.Placement = PlacementMode.AbsolutePoint;
-            popup.HorizontalOffset = screenX;
-            popup.VerticalOffset = screenY;
+            popup.HorizontalOffset = x;
+            popup.VerticalOffset = y;
+            LastScreenOffset = new Point(x, y);
             popup.IsOpen = true;
-            // Popup 关闭后无需清理（MainWindow 一直在）
         }
 
         public void Close() => popup.IsOpen = false;

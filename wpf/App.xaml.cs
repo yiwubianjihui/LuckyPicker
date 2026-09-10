@@ -89,10 +89,30 @@ namespace LuckyPickerWpf
             MainWin = new MainWindow();
             Log("S5");
             MainWindow = MainWin;
+
+            // 应用内自检：--selftest <输出文件>（不进入正常 UI 交互流程）
+            string? selfTestPath = null;
+            if (e.Args != null)
+            {
+                int i = Array.IndexOf(e.Args, "--selftest");
+                if (i >= 0 && i + 1 < e.Args.Length) selfTestPath = e.Args[i + 1];
+            }
+
             if (!BootMinimized)
             {
                 MainWin.Show();
                 MainWin.Activate();
+            }
+
+            if (selfTestPath != null)
+            {
+                MainWin.Show();
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    try { SelfTest.Run(MainWin!, selfTestPath); }
+                    catch { }
+                    Shutdown();
+                }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             }
         }
 

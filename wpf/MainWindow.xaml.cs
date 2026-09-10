@@ -496,7 +496,7 @@ namespace LuckyPickerWpf
             else { mini.WindowStartupLocation = WindowStartupLocation.CenterScreen; mini.Show(); }
         }
 
-        // ---------- 设置菜单（统一设置窗口） ----------
+        // ---------- 设置窗口（统一设置） ----------
         SettingsWindow? settingsWin;
         void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
 
@@ -505,21 +505,47 @@ namespace LuckyPickerWpf
             if (settingsWin != null && settingsWin.IsLoaded) { settingsWin.Activate(); return; }
             settingsWin = new SettingsWindow(this,
                 applyVoice: ApplyVoicePublic,
-                classNames: GetClassNames,
-                refreshBall: ApplyBallVisibility,
-                showHistory: ShowHistoryDialog,
+                ballChanged: ApplyBallSettings,          // 大小 / 显隐 / 固定 → 立即生效
+                rosterSaved: ReloadRosterFromDisk,
+                parseRoster: ParseRosterFile,
+                askPrefetch: names => ShowPrefetchDialog(names, settingsWin, modal: false),
+                showHistory: () => ShowHistoryDialog(settingsWin, modal: false),
+                showUpdateDownload: res => ShowUpdateDownload(res, settingsWin, modal: false),
+                speak: text => { try { Speak(text); } catch { } },
                 changeDefaultClass: () => { AppConfig.DefaultClassId = ""; AppConfig.Save(); classChosen = false; ShowClassMini(); },
-                onQuit: QuitApp,
-                showUpdateDownload: ShowUpdateDownload,
-                checkUpdateAsync: async url => await Task.Run(() => UpdateManager.Check(url)));
+                onQuit: QuitApp);
+            settingsWin.Closed += (s, e) => settingsWin = null;
             settingsWin.Show();
         }
 
-        // SettingsWindow 内部需要的回调
+        /// <summary>把悬浮球相关的配置一次性应用到球上（设置窗口调用，立即生效 + 已随 AppConfig.Save 持久化）。</summary>
+        public void ApplyBallSettings()
+        {
+            if (ball == null) return;
+            ball.SetSize(AppConfig.BallDiameter);        // 立即应用尺寸
+            ball.SetPinned(AppConfig.BallPinned);        // 固定状态（含"始终活跃"）
+            ApplyBallVisibility();                       // 显示 / 隐藏
+        }
+
+        /// <summary>名单保存/导入后刷新主窗口（设置窗口内嵌编辑器调用）。</summary>
+        public void ReloadRosterFromDisk()
+        {
+            try
+            {
+                core.Reload();
+                InitCore();
+                classChosen = !string.IsNullOrEmpty(AppConfig.DefaultClassId) && core.classIds.Contains(AppConfig.DefaultClassId);
+                HintText.Text = "√ 名单已更新（" + core.allStudents.Count + " 名学生）";
+            }
+            catch (Exception ex) { App.Log("ROSTER-RELOAD-EX: " + ex); }
+        }
+
+        /// <summary>供设置窗口内嵌导入使用的解析入口。</summary>
+        public static DataFile? ParseRosterFile(string path) => ParseRoster(path);
+
+        /// <summary>设置窗口语音保存：重建 TTS 引擎使新引擎/音色立即生效。</summary>
         public void ApplyVoicePublic()
         {
-            // 通过反射找到最近一次 ShowVoiceDialog 内部的 srcCombo / voiceCombo？太复杂。
-            // 简化：直接读 AppConfig 中的引擎/音色，重新初始化 tts（与原 ApplyVoice 等效）
             try { tts?.Dispose(); } catch { }
             tts = new TtsEngine(msg => Dispatcher.Invoke(() => { try { VoiceStatusText.Text = msg; } catch { } }));
             string status = tts.InitStatus();
@@ -679,9 +705,13 @@ namespace LuckyPickerWpf
 
         void ShowTrayMenu(System.Drawing.Point screenPt)
         {
-            try { trayMenu?.Close(); } catch { }
-            trayMenu = null;
-            // 托盘菜单简化为：显示主窗口 / 打开设置 / 退出
+            // 再点一次托盘图标 → 收起已打开的菜单
+            if (trayMenu != null)
+            {
+                try { trayMenu.Close(); } catch { }
+                trayMenu = null;
+                return;
+            }
             var menu = new ModernMenu(210);
             trayMenu = menu;
             menu.AddItem("显示主窗口", () => { trayMenu = null; Dispatcher.Invoke(ShowMainWindow); });
@@ -689,11 +719,7 @@ namespace LuckyPickerWpf
             menu.AddSeparator();
             menu.AddItem("退出程序", () => { trayMenu = null; Dispatcher.Invoke(QuitApp); });
 
-            // ModernMenu 用 Popup + PlacementTarget；这里用一个隐形 anchor 控件定位到托盘坐标
-            var anchor = new System.Windows.Controls.TextBlock { Width = 0, Height = 0 };
-            // Popup 自带 PopupAnimation/Fade，但 PlacementTarget 必须在 WPF 视觉树上
-            // 简化方案：用 System.Windows.Forms.Cursor.Position 拿到屏幕坐标 → 让 ModernMenu.Show 接收一个虚拟 anchor 之后自行定位
-            // 实际我们改写 ModernMenu 内部：用 Popup.HorizontalOffset / VerticalOffset 定位
+            // 设备像素 → DIP 的换算在 ModernMenu.ShowAtScreen 内部完成（含边界翻转）
             menu.ShowAtScreen(screenPt.X, screenPt.Y);
         }
 
@@ -945,14 +971,14 @@ namespace LuckyPickerWpf
         }
 
         // ---------------- 批量预生成语音缓存（进度 + 取消） ----------------
-        void ShowPrefetchDialog(List<string> names)
+        void ShowPrefetchDialog(List<string> names, Window? owner = null, bool modal = true)
         {
             if (names == null || names.Count == 0 || tts == null) return;
             var dlg = new Window
             {
                 Icon = Icon,
                 Title = "预生成语音缓存", Width = 480, Height = 210,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = owner ?? (Window)this,
                 ResizeMode = ResizeMode.NoResize, ShowInTaskbar = false
             };
             var panel = new StackPanel { Margin = new Thickness(22) };
@@ -1002,17 +1028,17 @@ namespace LuckyPickerWpf
                         btnCancel.IsEnabled = false;
                     }
                 }));
-            dlg.ShowDialog();
+            if (modal) dlg.ShowDialog(); else dlg.Show();
         }
 
-        void ShowHistoryDialog()
+        void ShowHistoryDialog(Window? owner = null, bool modal = true)
         {
             var dlg = new Window
             {
                 Icon = Icon,
                 Title = "抽选记录", Width = 460, Height = 460,
                 MinHeight = 320, MinWidth = 360,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = owner ?? (Window)this
             };
             // Grid: 上 = 列表（自适应撑满），下 = 按钮（固定 50）。避免按钮被裁掉。
             var grid = new Grid { Margin = new Thickness(16, 16, 16, 14) };
@@ -1036,7 +1062,7 @@ namespace LuckyPickerWpf
             grid.Children.Add(btnRow);
 
             dlg.Content = grid;
-            dlg.ShowDialog();
+            if (modal) dlg.ShowDialog(); else dlg.Show();
         }
 
         void ShowAboutDialog()
@@ -1093,12 +1119,12 @@ namespace LuckyPickerWpf
         }
 
         // ---------- 更新：后台下载安装器 ----------
-        void ShowUpdateDownload(UpdateResult res)
+        void ShowUpdateDownload(UpdateResult res, Window? owner = null, bool modal = true)
         {
             string url = !string.IsNullOrEmpty(res.SetupUrl) ? res.SetupUrl : res.DownloadUrl;
             if (string.IsNullOrEmpty(url))
             {
-                MessageBox.Show(this, "未获取到安装程序下载地址，请到官网下载。", "更新", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(owner ?? (Window)this, "未获取到安装程序下载地址，请到官网下载。", "更新", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LuckyPicker", "updates");
@@ -1108,7 +1134,7 @@ namespace LuckyPickerWpf
             var dlg = new Window
             {
                 Title = "下载更新 " + res.LatestVersion, Width = 420, Height = 210,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = owner ?? (Window)this,
                 ResizeMode = ResizeMode.NoResize,
                 Background = new SolidColorBrush(Color.FromRgb(255, 255, 255))
             };
@@ -1199,7 +1225,7 @@ namespace LuckyPickerWpf
 
             dlg.Content = root;
             dlg.Loaded += async (s, e) => await RunDownload();
-            dlg.ShowDialog();
+            if (modal) dlg.ShowDialog(); else dlg.Show();
         }
 
         // ---------- 解析名单文件 ----------
@@ -1252,6 +1278,60 @@ namespace LuckyPickerWpf
             base.OnClosed(e);
             try { ball?.Close(); } catch { }
             try { tray?.Dispose(); } catch { }
+        }
+
+        // ================================================================
+        // 自检钩子（仅供 SelfTest 使用，不影响正常逻辑）
+        // ================================================================
+        internal double BallDiameterForTest => ball?.BallDiameterNow ?? -1;
+        internal bool BallIsPinnedForTest => ball?.IsPinnedNow ?? false;
+        internal double BallLeftForTest => ball?.Left ?? double.NaN;
+        internal double BallTopForTest => ball?.Top ?? double.NaN;
+        internal double BallOpacityForTest => ball?.OpacityNow ?? -1;
+        internal bool BallHasScaleForTest => ball?.HasScaleTransform ?? false;
+        internal double BallScaleForTest => ball?.ScaleNow ?? -1;
+        internal void BallShowPickedForTest(string text) => ball?.ShowPicked(text);
+        internal void BallAutoHideForTest() => ball?.AutoHideAfterPick();
+        internal void BallPanelToggleForTest() { ShowBallPanel(); PumpFrames(220); }
+
+        internal ModernMenu? ShowTrayMenuForTest(int x, int y)
+        {
+            ShowTrayMenu(new System.Drawing.Point(x, y));
+            PumpFrames(150);
+            return trayMenu;
+        }
+
+        internal SettingsWindow? SettingsWindowForTest => settingsWin;
+        internal void OpenSettingsForTest()
+        {
+            OpenSettings();
+            PumpFrames(400);
+        }
+        internal int SettingsPageCountForTest(SettingsWindow sw) => sw.PageCountForTest;
+        internal void SettingsShowPageForTest(SettingsWindow sw, int idx) { sw.ShowPageForTest(idx); PumpFrames(300); }
+        internal bool SettingsHasInlineRosterForTest(SettingsWindow sw) => sw.HasInlineRosterForTest;
+        internal bool SettingsHasInlineRosterForTestAfterShow(SettingsWindow sw)
+        {
+            sw.ShowPageForTest(2);        // 名单管理
+            PumpFrames(400);
+            bool ok = sw.HasInlineRosterForTest;
+            sw.ShowPageForTest(0);
+            PumpFrames(250);
+            return ok;
+        }
+        internal bool SettingsNavRoundedForTest(SettingsWindow sw) => sw.NavRoundedForTest;
+        internal void SettingsOpenChildForTest(SettingsWindow sw) => sw.OpenChildForTest();
+
+        internal bool BigButtonsHaveNoEffectForTest()
+            => PickBtn.Effect == null && MultiBtn.Effect == null && NumBtn.Effect == null;
+
+        internal static void PumpFrames(int ms)
+        {
+            var frame = new DispatcherFrame();
+            var t = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(ms) };
+            t.Tick += (s, e) => { t.Stop(); frame.Continue = false; };
+            t.Start();
+            Dispatcher.PushFrame(frame);
         }
     }
 }

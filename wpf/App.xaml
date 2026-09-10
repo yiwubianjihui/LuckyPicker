@@ -30,15 +30,17 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="28">
+                        <Grid>
+                            <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="28" />
+                            <Border x:Name="ov" Background="#FFFFFF" CornerRadius="28" Opacity="0" />
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Opacity" Value="0.85" />
+                                <Setter TargetName="ov" Property="Opacity" Value="0.14" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Opacity" Value="0.7" />
+                                <Setter TargetName="ov" Property="Opacity" Value="0.26" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -100,17 +102,17 @@
                             </ToggleButton>
                             <Popup IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
                                    AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
-                                <Border Margin="0,4,0,0" Background="#FCFCFC" BorderBrush="#E5E5E5"
-                                        BorderThickness="1" CornerRadius="10" Padding="6"
-                                        MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
-                                    <Border.Effect>
-                                        <DropShadowEffect Color="Black" Opacity="0.16" BlurRadius="16"
-                                                          ShadowDepth="2" Direction="270" />
-                                    </Border.Effect>
-                                    <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
-                                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
-                                    </ScrollViewer>
-                                </Border>
+                                <!-- 投影放在底层 Border 上，内容 Border 不挂 Effect（否则选项文字发虚） -->
+                                <Grid Margin="0,4,0,0">
+                                    <Border Background="#D8DEE9" CornerRadius="10" Margin="1,2,1,0" />
+                                    <Border Background="#FCFCFC" BorderBrush="#E5E5E5"
+                                            BorderThickness="1" CornerRadius="10" Padding="6"
+                                            MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
+                                        <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
+                                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained" />
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
                             </Popup>
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -177,10 +179,10 @@
                                 <Setter TargetName="bd" Property="Background" Value="#1D4ED8" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Opacity" Value="0.9" />
+                                <Setter TargetName="bd" Property="Background" Value="#1E40AF" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="bd" Property="Opacity" Value="0.5" />
+                                <Setter TargetName="bd" Property="Background" Value="#93B4F5" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -208,7 +210,7 @@
                                 <Setter TargetName="bd" Property="Background" Value="#E2E8F0" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Opacity" Value="0.9" />
+                                <Setter TargetName="bd" Property="Background" Value="#CBD5E1" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
