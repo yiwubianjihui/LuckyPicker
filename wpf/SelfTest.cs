@@ -29,7 +29,7 @@ namespace LuckyPickerWpf
         {
             try
             {
-                Execute(win);
+                Execute(win, outPath);
             }
             catch (Exception ex)
             {
@@ -50,7 +50,7 @@ namespace LuckyPickerWpf
             Dispatcher.PushFrame(frame);
         }
 
-        static void Execute(MainWindow win)
+        static void Execute(MainWindow win, string outPath)
         {
             var src = PresentationSource.FromVisual(win);
             double scale = 1.0;
@@ -176,6 +176,19 @@ namespace LuckyPickerWpf
                 bool rounded = win.SettingsNavRoundedForTest(sw);
                 A("4 左栏选中项圆角（自定义 TreeViewItem 模板）", rounded, "CornerRadius=9 的选中 Border");
 
+                // 逐页渲染截图（in-process RenderTargetBitmap，不依赖点击/前台）
+                string shotDir = Path.Combine(Path.GetDirectoryName(outPath) ?? ".", "settings_shots");
+                int shots = 0;
+                for (int p = 0; p < 5; p++)
+                {
+                    sw.ShowPageForTest(p);
+                    Pump(420);
+                    if (SaveShot(sw, Path.Combine(shotDir, $"page{p}_{PageName(p)}.png"))) shots++;
+                }
+                sw.ShowPageForTest(0);
+                Pump(250);
+                A("截图 设置窗口 5 个分类页", shots == 5, shots + "/5 张 → " + shotDir);
+
                 // 6. 子窗口随父窗口关闭
                 win.SettingsOpenChildForTest(sw);
                 Pump(900);
@@ -207,6 +220,31 @@ namespace LuckyPickerWpf
             }
             catch { }
             return -1;
+        }
+
+        static string PageName(int i) => new[] { "general", "voice", "roster", "history", "about" }[i];
+
+        /// <summary>把窗口当前内容渲染成 PNG（不依赖窗口在前台）。</summary>
+        static bool SaveShot(Window w, string path)
+        {
+            try
+            {
+                if (w.Content is not FrameworkElement root) return false;
+                root.UpdateLayout();
+                int cw = (int)Math.Ceiling(root.ActualWidth);
+                int ch = (int)Math.Ceiling(root.ActualHeight);
+                if (cw <= 0 || ch <= 0) return false;
+                var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    cw, ch, 96, 96, PixelFormats.Pbgra32);
+                rtb.Render(root);
+                var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rtb));
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                using var fs = File.Create(path);
+                enc.Save(fs);
+                return true;
+            }
+            catch { return false; }
         }
     }
 }

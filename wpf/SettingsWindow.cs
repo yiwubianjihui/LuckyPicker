@@ -756,7 +756,12 @@ namespace LuckyPickerWpf
         // ==================== 自检钩子 ====================
 
         internal int PageCountForTest => pages.Count;
-        internal void ShowPageForTest(int idx) => ShowPage(idx);
+        internal void ShowPageForTest(int idx)
+        {
+            // 同步左侧导航选中态，保证截图/断言与实际点击一致
+            try { if (idx >= 0 && idx < treeNav.Items.Count) ((TreeViewItem)treeNav.Items[idx]).IsSelected = true; } catch { }
+            ShowPage(idx);
+        }
         internal bool HasInlineRosterForTest
         {
             get
