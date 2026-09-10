@@ -168,6 +168,11 @@ namespace LuckyPickerWpf
                 A("1c 名单编辑为内嵌（DataGrid 在设置窗口内）", inlineRoster,
                   "切换到名单管理页后，rosterGrid 在设置窗口逻辑/视觉树内");
 
+                // 主窗口截图（in-process，不依赖前台/截屏）
+                string shotRoot = Path.GetDirectoryName(outPath) ?? ".";
+                A("截图 主窗口", SaveShot(win, Path.Combine(shotRoot, "main_window.png")),
+                  Path.Combine(shotRoot, "main_window.png"));
+
                 var strayEditor = Application.Current.Windows.OfType<Window>()
                     .FirstOrDefault(w => w.Title != null && w.Title.Contains("名单编辑") && !ReferenceEquals(w, sw));
                 A("1d 没有弹出独立名单编辑窗口", strayEditor == null,

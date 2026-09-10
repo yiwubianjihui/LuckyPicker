@@ -84,7 +84,7 @@ namespace LuckyPickerWpf
             {
                 tts = new TtsEngine(s => Dispatcher.Invoke(() => { try { VoiceStatusText.Text = s; } catch { } }));
                 string st = tts.InitStatus();   // 初始化本地 SAPI 兜底（在线失败时保证能出声）
-                VoiceStatusText.Text = "♪ 语音：" + st;
+                VoiceStatusText.Text = st;
                 try { tts.QueueWarmup(GetClassNames()); } catch { }
             }
             catch { }
@@ -354,7 +354,7 @@ namespace LuckyPickerWpf
             try { tts?.Dispose(); } catch { }
             tts = new TtsEngine(msg => Dispatcher.Invoke(() => { try { VoiceStatusText.Text = msg; } catch { } }));
             string status = tts.InitStatus();
-            VoiceStatusText.Text = "♪ 语音：" + status;
+            VoiceStatusText.Text = status;
             try { tts.QueueWarmup(GetClassNames()); } catch { }
         }
 
@@ -549,7 +549,7 @@ namespace LuckyPickerWpf
             try { tts?.Dispose(); } catch { }
             tts = new TtsEngine(msg => Dispatcher.Invoke(() => { try { VoiceStatusText.Text = msg; } catch { } }));
             string status = tts.InitStatus();
-            VoiceStatusText.Text = "♪ 语音：" + status;
+            VoiceStatusText.Text = status;
             try { tts.QueueWarmup(GetClassNames()); } catch { }
         }
 
