@@ -114,6 +114,35 @@ namespace LuckyPickerWpf
                     Shutdown();
                 }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
             }
+
+            // 空转诊断：--fadewatch <输出文件>
+            // 走的是**完全正常的启动路径**（不像 --selftest 那样自己驱动 dispatcher），
+            // 只逐秒把悬浮球的渐隐判定条件落盘。用于排查"自检能渐隐、实际运行不渐隐"。
+            string? fadeWatchPath = null;
+            if (e.Args != null)
+            {
+                int j = Array.IndexOf(e.Args, "--fadewatch");
+                if (j >= 0 && j + 1 < e.Args.Length) fadeWatchPath = e.Args[j + 1];
+            }
+            if (fadeWatchPath != null)
+            {
+                MainWin.Show();
+                var watch = new System.Windows.Threading.DispatcherTimer
+                { Interval = TimeSpan.FromSeconds(1) };
+                int ticks = 0;
+                watch.Tick += (s2, e2) =>
+                {
+                    try
+                    {
+                        var bw = MainWin!.BallWindowForTest as FloatingBallWindow;
+                        File.AppendAllText(fadeWatchPath,
+                            DateTime.Now.ToString("HH:mm:ss") + "  " + (bw?.DiagNow ?? "no-ball") + "\n");
+                    }
+                    catch { }
+                    if (++ticks >= 16) { watch.Stop(); Shutdown(); }
+                };
+                watch.Start();
+            }
         }
 
         protected override void OnExit(ExitEventArgs e)

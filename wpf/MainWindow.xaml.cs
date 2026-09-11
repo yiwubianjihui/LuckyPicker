@@ -1293,12 +1293,52 @@ namespace LuckyPickerWpf
         internal void BallShowPickedForTest(string text) => ball?.ShowPicked(text);
         internal void BallAutoHideForTest() => ball?.AutoHideAfterPick();
         internal void BallPanelToggleForTest() { ShowBallPanel(); PumpFrames(220); }
+        internal double BallShadowPadForTest => ball?.ShadowPadNow ?? -1;
+        internal double BallBrushLuminanceForTest => ball?.BrushLuminanceNow ?? -1;
+        internal void BallTouchForTest() => ball?.TouchForTest();
+        internal void BallHoverForTest(bool on) => ball?.HoverForTest(on);
+        internal bool BallInteractiveForTest => ball?.InteractiveNow ?? false;
+        internal bool BallDimmedForTest => ball?.IsDimmedNow ?? false;
+
+        /// <summary>自检用：还原悬浮球位置（避免自检把位置写脏）。直接赋值，不触发吸附与保存。</summary>
+        internal void RestoreBallForTest(int x, int y)
+        {
+            try
+            {
+                if (ball == null) return;
+                ball.Left = x; ball.Top = y;
+            }
+            catch { }
+        }
+        internal Window? BallWindowForTest => ball;
+
+        /// <summary>自检用：弹出悬浮球右键菜单。</summary>
+        internal ModernMenu? BallContextMenuForTest()
+        {
+            var m = ball?.ShowContextMenuForTest();
+            PumpFrames(200);
+            return m;
+        }
+        internal static System.Windows.Point? BallPanelPosForTest => BallQuickPanel.LastPanelPos;
+        internal double BallWidthForTest => ball?.Width ?? -1;
+
+        /// <summary>自检用：把主窗口隐藏（模拟"关闭到托盘"），验证托盘菜单仍能正确定位。</summary>
+        internal void HideMainForTest() { Hide(); PumpFrames(250); }
+        internal void ShowMainForTest() { Show(); Activate(); PumpFrames(250); }
 
         internal ModernMenu? ShowTrayMenuForTest(int x, int y)
         {
             ShowTrayMenu(new System.Drawing.Point(x, y));
             PumpFrames(150);
             return trayMenu;
+        }
+
+        /// <summary>自检用：关闭并清空托盘菜单引用（模拟"菜单已收起"，以便再次弹出）。</summary>
+        internal void CloseTrayMenuForTest()
+        {
+            try { trayMenu?.Close(); } catch { }
+            trayMenu = null;
+            PumpFrames(150);
         }
 
         internal SettingsWindow? SettingsWindowForTest => settingsWin;
@@ -1321,6 +1361,16 @@ namespace LuckyPickerWpf
         }
         internal bool SettingsNavRoundedForTest(SettingsWindow sw) => sw.NavRoundedForTest;
         internal void SettingsOpenChildForTest(SettingsWindow sw) => sw.OpenChildForTest();
+        internal int SettingsBallSizeCheckedCountForTest(SettingsWindow sw) => sw.BallSizeCheckedCountForTest;
+        internal double SettingsBallPreviewDiameterForTest(SettingsWindow sw) => sw.BallPreviewDiameterForTest;
+        internal string SettingsStatusTextForTest(SettingsWindow sw) => sw.StatusTextForTest;
+        internal void SettingsSwitchPageForTest(SettingsWindow sw, int idx) => sw.SwitchPageForTest(idx);
+        internal bool SettingsCheckBallSizeForTest(SettingsWindow sw, int d)
+        {
+            bool ok = sw.CheckBallSizeForTest(d);
+            PumpFrames(200);
+            return ok;
+        }
 
         internal bool BigButtonsHaveNoEffectForTest()
             => PickBtn.Effect == null && MultiBtn.Effect == null && NumBtn.Effect == null;

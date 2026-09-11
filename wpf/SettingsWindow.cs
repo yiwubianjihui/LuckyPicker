@@ -48,6 +48,10 @@ namespace LuckyPickerWpf
         DataGrid rosterGrid;
         TextBlock rosterStatus;
 
+        // -------- 常规页：悬浮球大小单选组 --------
+        readonly List<RadioButton> sizeRadios = new();
+        Border? ballPreview;
+
         // -------- 记录 / 关于 --------
         ListBox historyList;
         TextBlock historyEmpty;
@@ -246,11 +250,25 @@ namespace LuckyPickerWpf
             if (treeNav.Items.Count > 0) ((TreeViewItem)treeNav.Items[0]).IsSelected = true;
         }
 
+        // 各分类页的默认底部提示。切换页面时刷新状态栏，避免把上一页的
+        // "✓ 悬浮球大小已更新为 80（已保存）"之类操作反馈带到别的页面上——
+        // 那看起来像串台，也会让人误以为当前页面刚发生了什么。
+        static readonly string[] PageHints =
+        {
+            "设置改动即时生效并已保存",
+            "点「试听」预览音色，点「保存」立即生效",
+            "修改后点「保存名单」写入本机配置",
+            "抽选记录仅保存在本机",
+            "检查更新不会改动当前设置",
+        };
+
         void ShowPage(int idx)
         {
             if (pageHost == null) return;
             for (int i = 0; i < pageHost.Children.Count; i++)
                 pageHost.Children[i].Visibility = (i == idx) ? Visibility.Visible : Visibility.Collapsed;
+            if (statusText != null && idx >= 0 && idx < PageHints.Length)
+                statusText.Text = PageHints[idx];   // 状态栏跟随当前页面
         }
 
         // ==================== 常规 ====================
@@ -282,26 +300,38 @@ namespace LuckyPickerWpf
 
             chkBallPinned = new CheckBox
             {
-                Content = "固定悬浮球（始终活跃，连续抽签不收起）",
+                Content = "固定悬浮球",
                 IsChecked = AppConfig.BallPinned,
-                FontSize = 13.5, Margin = new Thickness(0, 6, 0, 14), Cursor = Cursors.Hand,
+                FontSize = 13.5, Margin = new Thickness(0, 6, 0, 4), Cursor = Cursors.Hand,
                 Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59))
             };
-            chkBallPinned.Checked += (s, e) => { if (loading) return; AppConfig.BallPinned = true; AppConfig.Save(); ballChanged?.Invoke(); BallQuickPanel.RefreshPinState(true); statusText.Text = "✓ 悬浮球已固定（保持活跃）"; };
-            chkBallPinned.Unchecked += (s, e) => { if (loading) return; AppConfig.BallPinned = false; AppConfig.Save(); ballChanged?.Invoke(); BallQuickPanel.RefreshPinState(false); statusText.Text = "已取消固定悬浮球"; };
+            chkBallPinned.Checked += (s, e) => { if (loading) return; AppConfig.BallPinned = true; AppConfig.Save(); ballChanged?.Invoke(); BallQuickPanel.RefreshPinState(true); UpdateBallPreview(); statusText.Text = "✓ 悬浮球已固定"; };
+            chkBallPinned.Unchecked += (s, e) => { if (loading) return; AppConfig.BallPinned = false; AppConfig.Save(); ballChanged?.Invoke(); BallQuickPanel.RefreshPinState(false); UpdateBallPreview(); statusText.Text = "已取消固定悬浮球"; };
             sp.Children.Add(chkBallPinned);
+            sp.Children.Add(new TextBlock
+            {
+                Text = "4 秒无操作后自动半透明以免遮挡内容；固定只影响抽完是否贴边收起，不影响渐隐。",
+                FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
+                Margin = new Thickness(0, 0, 0, 6), TextWrapping = TextWrapping.Wrap
+            });
 
             // 悬浮球大小 —— 选中即时应用到球并持久化
             sp.Children.Add(MakeSubTitle("悬浮球大小"));
             int cur = AppConfig.BallDiameter;
             var sizeRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 4) };
+            sizeRadios.Clear();
             foreach (var kv in new[] { new[] { "小（80）", "80" }, new[] { "中（96）", "96" }, new[] { "大（120）", "120" } })
             {
                 string label = kv[0];
                 int d = int.Parse(kv[1]);
                 var b = new RadioButton
                 {
-                    Content = label, GroupName = "BallSize_" + Guid.NewGuid().ToString("N"),
+                    Content = label,
+                    // 关键：三项必须共用同一个 GroupName 才能互斥。
+                    // 之前每项各用 Guid 生成的唯一组名 → 互不相干 → 点一个不会取消另一个
+                    //（表现就是"全都打勾"）。
+                    GroupName = "BallSizeGroup",
+                    Tag = d,
                     IsChecked = Math.Abs(cur - d) < 9,
                     FontSize = 13, Margin = new Thickness(0, 0, 18, 0), Cursor = Cursors.Hand,
                     Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59))
@@ -313,8 +343,10 @@ namespace LuckyPickerWpf
                     AppConfig.BallDiameter = captured;
                     AppConfig.Save();            // 持久化
                     ballChanged?.Invoke();       // 立即应用到悬浮球
+                    UpdateBallPreview();
                     statusText.Text = "✓ 悬浮球大小已更新为 " + captured + "（已保存）";
                 };
+                sizeRadios.Add(b);
                 sizeRow.Children.Add(b);
             }
             sp.Children.Add(sizeRow);
@@ -324,6 +356,40 @@ namespace LuckyPickerWpf
                 FontSize = 11, Foreground = new SolidColorBrush(Color.FromRgb(148, 163, 184)),
                 Margin = new Thickness(0, 0, 0, 6), TextWrapping = TextWrapping.Wrap
             });
+
+            // 实时预览：随大小 / 固定状态同步，所见即所得
+            sp.Children.Add(MakeSubTitle("预览"));
+            var previewHost = new Border
+            {
+                Height = 156, CornerRadius = new CornerRadius(12),
+                Background = new SolidColorBrush(Color.FromRgb(0xF1, 0xF5, 0xF9)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 2, 0, 6)
+            };
+            ballPreview = new Border
+            {
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Background = BuildPreviewBrush(),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(210, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    Color = Color.FromRgb(0x1E, 0x3A, 0x8A), Opacity = 0.20,
+                    BlurRadius = 12, ShadowDepth = 1.5, Direction = 270
+                },
+                Child = new TextBlock
+                {
+                    Text = "摇", FontSize = 15, FontWeight = FontWeights.Bold,
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x1D, 0x4E, 0xD8)),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+            previewHost.Child = new Grid { Children = { ballPreview } };
+            sp.Children.Add(previewHost);
+            UpdateBallPreview();
 
             // 默认班级
             sp.Children.Add(MakeSubTitle("默认班级"));
@@ -365,6 +431,40 @@ namespace LuckyPickerWpf
             var btnQuit = new Button { Content = "退出程序", Width = 130, Style = (Style)FindResource("ModernBtnGhost"), HorizontalAlignment = HorizontalAlignment.Left };
             btnQuit.Click += (s, e) => { onQuit(); Close(); };
             sp.Children.Add(btnQuit);
+        }
+
+        /// <summary>预览球体渐变（与悬浮球实际配色一致）。</summary>
+        static Brush BuildPreviewBrush()
+        {
+            var g = new RadialGradientBrush
+            {
+                GradientOrigin = new Point(0.34, 0.28),
+                Center = new Point(0.42, 0.38),
+                RadiusX = 0.90, RadiusY = 0.90
+            };
+            g.GradientStops.Add(new GradientStop(Color.FromRgb(0xF0, 0xF6, 0xFF), 0.0));
+            g.GradientStops.Add(new GradientStop(Color.FromRgb(0xC6, 0xDC, 0xF9), 0.55));
+            g.GradientStops.Add(new GradientStop(Color.FromRgb(0x9E, 0xC0, 0xEE), 1.0));
+            return g;
+        }
+
+        /// <summary>按当前配置刷新预览球的尺寸 / 固定描边。</summary>
+        void UpdateBallPreview()
+        {
+            if (ballPreview == null) return;
+            try
+            {
+                double d = Math.Max(64, Math.Min(160, AppConfig.BallDiameter));
+                ballPreview.Width = d;
+                ballPreview.Height = d;
+                ballPreview.CornerRadius = new CornerRadius(d / 2);
+                ballPreview.BorderBrush = AppConfig.BallPinned
+                    ? new SolidColorBrush(Color.FromRgb(0x3B, 0x82, 0xF6))
+                    : new SolidColorBrush(Color.FromArgb(210, 0xFF, 0xFF, 0xFF));
+                ballPreview.BorderThickness = new Thickness(AppConfig.BallPinned ? 2 : 1);
+                if (ballPreview.Child is TextBlock tb) tb.FontSize = Math.Max(13, d * 0.30);
+            }
+            catch { }
         }
 
         // ==================== 语音 ====================
@@ -796,6 +896,27 @@ namespace LuckyPickerWpf
 
         /// <summary>自检用：打开一个子窗口（非模态，Owner=本窗口）。</summary>
         internal void OpenChildForTest() => showHistory?.Invoke();
+
+        /// <summary>自检用：当前被勾选的"悬浮球大小"单选项数量（应为 1）。</summary>
+        internal int BallSizeCheckedCountForTest => sizeRadios.Count(r => r.IsChecked == true);
+
+        /// <summary>自检用：模拟点选某个尺寸，返回是否找到该选项。</summary>
+        internal bool CheckBallSizeForTest(int diameter)
+        {
+            var r = sizeRadios.FirstOrDefault(x => x.Tag is int d && d == diameter);
+            if (r == null) return false;
+            r.IsChecked = true;
+            return true;
+        }
+
+        /// <summary>自检用：预览球直径是否已随配置同步。</summary>
+        internal double BallPreviewDiameterForTest => ballPreview?.Width ?? -1;
+
+        /// <summary>自检用：底部状态栏当前文案。</summary>
+        internal string StatusTextForTest => statusText?.Text ?? "";
+
+        /// <summary>自检用：切到某个分类页。</summary>
+        internal void SwitchPageForTest(int idx) => ShowPage(idx);
 
         // ==================== 辅助 ====================
 

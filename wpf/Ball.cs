@@ -4,13 +4,16 @@
 // 悬浮球：无边框透明圆球、置顶、独立于主窗口；单击弹快捷面板（防误触）、
 //         拖动移位记忆、右键菜单；抽中结果球面显示（单人姓名 / 多人「N 人」）。
 //         固定（图钉）时保持活跃：不自动变淡、抽完不收起。
+// 视觉：浅色渐变 + 留白投影（简约、低干扰）；空闲 4s 后自动变淡。
 // 班级小窗：置顶小卡片，显示在球旁，点选班级立即抽取，失焦关闭。
 // ================================================================
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Effects;
@@ -20,6 +23,37 @@ namespace LuckyPickerWpf
 {
     public class FloatingBallWindow : Window
     {
+        // 球体外留白：窗口比球体大一圈，给投影留出绘制空间。
+        // 旧实现窗口 == 球直径、球体再用 ballSize-6 做内缩，投影不足 3px 被窗口边界
+        // 直接裁掉 —— 这就是"阴影被遮住"的根因。现在窗口 = 球直径 + 2*留白，
+        // 球体本身仍是设定的直径，视觉大小不变。
+        const double ShadowPad = 8;
+        const double IdleSeconds = 4;
+        const double IdleOpacity = 0.35;
+
+        /// <summary>
+        /// 渐隐目标不透明度。正常情况下是常量 IdleOpacity；
+        /// 允许用环境变量 LP_IDLE_OPACITY 覆盖，仅用于诊断——
+        /// 例如设成 0 可验证"渐隐是否真的作用到了屏幕合成结果"。
+        /// </summary>
+        static double IdleOpacityTarget
+        {
+            get
+            {
+                try
+                {
+                    var s = Environment.GetEnvironmentVariable("LP_IDLE_OPACITY");
+                    if (!string.IsNullOrWhiteSpace(s)
+                        && double.TryParse(s, System.Globalization.NumberStyles.Float,
+                                           System.Globalization.CultureInfo.InvariantCulture, out var v)
+                        && v >= 0 && v <= 1)
+                        return v;
+                }
+                catch { }
+                return IdleOpacity;
+            }
+        }
+
         double ballSize;
         readonly Action onClicked;          // 单击（弹出快捷面板）
         readonly Action onPickOne;          // 右键菜单：抽一人
@@ -29,7 +63,7 @@ namespace LuckyPickerWpf
         readonly Action onQuit;             // 右键菜单：退出程序
         readonly Action showMain;           // 显示主窗口
 
-        readonly Border ballBorder;         // 球体（渐变圆）
+        readonly Border ballBorder;         // 球体（浅色渐变圆）
         readonly ScaleTransform ballScale;  // 悬停/抽中缩放
         readonly TranslateTransform ballShift; // 贴边滑动
         readonly TextBlock faceText;
@@ -37,10 +71,19 @@ namespace LuckyPickerWpf
         Point downPos;
         bool dragging;
         bool pinned;
+        bool hovering;
         int flashTicks;
         readonly DispatcherTimer flashTimer;
         readonly DispatcherTimer idleTimer;
         bool idleDimmed;
+        DateTime lastActive = DateTime.Now;
+
+        // 浅色配色（低饱和、低干扰）
+        static readonly Color BallHi = Color.FromRgb(0xF0, 0xF6, 0xFF);
+        static readonly Color BallMid = Color.FromRgb(0xC6, 0xDC, 0xF9);
+        static readonly Color BallEdge = Color.FromRgb(0x9E, 0xC0, 0xEE);
+        static readonly Color FaceFg = Color.FromRgb(0x1D, 0x4E, 0xD8);
+        static readonly Color Accent = Color.FromRgb(0x3B, 0x82, 0xF6);
 
         public FloatingBallWindow(Action clicked, Action pickOne, Action pickMulti,
                                   Action resetPool, Action hideSelf, Action quit, Action showMainWin)
@@ -55,74 +98,100 @@ namespace LuckyPickerWpf
             ShowInTaskbar = false;
             ResizeMode = ResizeMode.NoResize;
             ballSize = Math.Max(64, Math.Min(160, AppConfig.BallDiameter));
-            Width = ballSize; Height = ballSize;
+            Width = ballSize + ShadowPad * 2; Height = ballSize + ShadowPad * 2;
             WindowStartupLocation = WindowStartupLocation.Manual;
 
-            // ---- 球体：径向渐变 + 柔和高光，比纯色更立体 ----
+            // ---- 球体：浅色径向渐变，干净利落 ----
             ballScale = new ScaleTransform(1, 1);
             ballShift = new TranslateTransform(0, 0);
 
+            // 深蓝字 + 浅蓝底：对比充分且不需要文字阴影（少一点"嘈杂"）
             faceText = new TextBlock
             {
-                Text = "摇", FontSize = Math.Max(13, ballSize * 0.30), FontWeight = FontWeights.Bold,
-                Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Effect = new DropShadowEffect { Color = Colors.Black, Opacity = 0.35, BlurRadius = 6, ShadowDepth = 1, Direction = 315 }
+                Text = "摇", FontFamily = new FontFamily("Microsoft YaHei"),
+                FontSize = Math.Max(13, ballSize * 0.30), FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(FaceFg),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
             };
 
             var faceLayer = new Grid();
             faceLayer.Children.Add(faceText);
 
+            double inner = ballSize;
             ballBorder = new Border
             {
-                Width = ballSize - 6, Height = ballSize - 6,
-                CornerRadius = new CornerRadius((ballSize - 6) / 2),
+                Width = inner, Height = inner,
+                CornerRadius = new CornerRadius(inner / 2),
                 Background = BuildBallBrush(),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(220, 235, 255, 255)),
-                BorderThickness = new Thickness(1.5),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(210, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
                 Cursor = Cursors.Hand,
                 Child = faceLayer,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
                 RenderTransform = new TransformGroup { Children = { ballScale, ballShift } },
                 RenderTransformOrigin = new Point(0.5, 0.5),
-                // 球体自身带柔和投影，不依赖窗口阴影（避免 AllowsTransparency 下的模糊）
-                Effect = new DropShadowEffect { Color = Color.FromArgb(90, 0, 0, 0), BlurRadius = 12, ShadowDepth = 2, Direction = 270 }
+                // 留白 8px 后投影不再被裁；数值克制，避免"嘈杂"
+                Effect = new DropShadowEffect
+                {
+                    Color = Color.FromRgb(0x1E, 0x3A, 0x8A), Opacity = 0.20,
+                    BlurRadius = 12, ShadowDepth = 1.5, Direction = 270
+                }
             };
             Content = ballBorder;
 
-            // 抽中后的闪烁：在几种蓝色间循环，营造"滚动"感
+            // 抽中后的轻微脉冲（浅色系，收敛为 12 帧 ≈ 1.3s）
             flashTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(110) };
             flashTimer.Tick += (s, e) =>
             {
                 flashTicks++;
-                if (flashTicks >= 22)
+                if (flashTicks >= 12)
                 {
                     flashTimer.Stop();
                     ballBorder.Background = BuildBallBrush();
                     SetFace("摇", Math.Max(13, ballSize * 0.30));
                     return;
                 }
-                var c = (flashTicks % 2 == 0) ? Color.FromRgb(37, 99, 235) : Color.FromRgb(96, 165, 250);
-                ballBorder.Background = new SolidColorBrush(c);
+                ballBorder.Background = new SolidColorBrush(
+                    flashTicks % 2 == 0 ? Color.FromRgb(0xB9, 0xD3, 0xF6) : BallEdge);
             };
 
             MouseRightButtonUp += (s, e) => { e.Handled = true; ShowContextMenu(); };
             MouseDown += OnBallMouseDown;
             MouseMove += OnBallMouseMove;
             MouseUp += OnBallMouseUp;
-            MouseEnter += (s, e) => { WakeUp(); AnimateScale(1.08, 140); };
-            MouseLeave += (s, e) => { AnimateScale(1.0, 180); StartIdle(); };
+            MouseEnter += (s, e) => { hovering = true; Touch(); AnimateScale(1.06, 140); };
+            MouseLeave += (s, e) => { hovering = false; Touch(); AnimateScale(1.0, 180); };
+
+            // 构造阶段窗口还没有 PresentationSource，DPI 换算只能靠回退值；
+            // 等 SourceInitialized 拿到真实指标后再精确校正一次位置，
+            // 否则在多屏 / 非 100% 缩放下可能落在屏幕外。
             RestorePosition();
+            SourceInitialized += (s, e) => RestorePosition();
+            Loaded += (s, e) => RestorePosition();
 
             SetPinned(AppConfig.BallPinned);
 
-            // 不活动一段时间后降低不透明度（减少视觉干扰 / 投屏常驻）；固定时不生效
-            idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+            // 空闲渐隐：无操作 IdleSeconds 秒后降低不透明度，避免常驻遮挡内容。
+            //
+            // 用「最后活动时间 + 1s 心跳」判定，而不是一次性的单发定时器 —— 旧实现
+            // 在固定(pinned)状态下直接 return，导致"固定后渐隐失效"（这既是功能缺陷，
+            // 也让用户误以为渐隐坏了）。渐隐只是视觉减扰，不影响可交互性：
+            // 窗口与球体始终保持命中测试，鼠标一进入立即恢复不透明。
+            idleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             idleTimer.Tick += (s, e) =>
             {
-                idleTimer.Stop();
-                if (dragging || pinned) return;
-                idleDimmed = true;
-                AnimateOpacity(0.45, 420);
+                // 拖动中 / 鼠标悬停 / 快捷面板或右键菜单开着 → 视为正在使用，保持清晰
+                if (dragging || hovering || BallQuickPanel.IsOpen || activeCtxMenu != null)
+                {
+                    lastActive = DateTime.Now;
+                    if (idleDimmed) WakeUp();
+                    return;
+                }
+                bool shouldDim = (DateTime.Now - lastActive).TotalSeconds >= IdleSeconds;
+                if (shouldDim && !idleDimmed) { idleDimmed = true; AnimateOpacity(IdleOpacityTarget, 520); }
+                else if (!shouldDim && idleDimmed) { idleDimmed = false; AnimateOpacity(1.0, 220); }
             };
             idleTimer.Start();
         }
@@ -131,13 +200,13 @@ namespace LuckyPickerWpf
         {
             var g = new RadialGradientBrush
             {
-                GradientOrigin = new Point(0.32, 0.28),
-                Center = new Point(0.38, 0.35),
-                RadiusX = 0.85, RadiusY = 0.85
+                GradientOrigin = new Point(0.34, 0.28),
+                Center = new Point(0.42, 0.38),
+                RadiusX = 0.90, RadiusY = 0.90
             };
-            g.GradientStops.Add(new GradientStop(Color.FromRgb(96, 165, 250), 0.0));   // 高光
-            g.GradientStops.Add(new GradientStop(Color.FromRgb(37, 99, 235), 0.55));
-            g.GradientStops.Add(new GradientStop(Color.FromRgb(29, 78, 216), 1.0));   // 边缘
+            g.GradientStops.Add(new GradientStop(BallHi, 0.0));
+            g.GradientStops.Add(new GradientStop(BallMid, 0.55));
+            g.GradientStops.Add(new GradientStop(BallEdge, 1.0));
             return g;
         }
 
@@ -215,17 +284,17 @@ namespace LuckyPickerWpf
 
         // ---------------- 状态 ----------------
 
+        /// <summary>记录一次交互，重置空闲计时。</summary>
+        void Touch()
+        {
+            lastActive = DateTime.Now;
+            if (idleDimmed) WakeUp();
+        }
+
         void WakeUp()
         {
             if (idleDimmed) { idleDimmed = false; AnimateOpacity(1.0, 220); }
             else { try { ballBorder.BeginAnimation(UIElement.OpacityProperty, null); ballBorder.Opacity = 1.0; } catch { } }
-            if (!pinned && idleTimer != null) { idleTimer.Stop(); idleTimer.Start(); }
-        }
-
-        void StartIdle()
-        {
-            if (pinned) return;
-            if (idleTimer != null) { idleTimer.Stop(); idleTimer.Start(); }
         }
 
         void SetFace(string text, double size)
@@ -236,10 +305,11 @@ namespace LuckyPickerWpf
 
         static ModernMenu? activeCtxMenu;   // 单例：再点球时收起
 
-        /// <summary>右键菜单（Win11 风格现代菜单，跟随系统主题）。再点切换。</summary>
+        /// <summary>右键菜单（现代菜单，跟随系统主题）：显示在悬浮球旁边。</summary>
         void ShowContextMenu()
         {
             if (activeCtxMenu != null) { try { activeCtxMenu.Close(); } catch { } activeCtxMenu = null; return; }
+            Touch();
             var m = new ModernMenu(200);
             activeCtxMenu = m;
             m.AddItem("显示主窗口", () => { activeCtxMenu = null; showMain?.Invoke(); });
@@ -249,7 +319,7 @@ namespace LuckyPickerWpf
             m.AddItem("重置候选池", () => { activeCtxMenu = null; onResetPool?.Invoke(); });
             m.AddSeparator();
             m.AddCheck("开机自启动", AutoStart.IsEnabled(), v => AutoStart.SetEnabled(v));
-            m.AddCheck("固定悬浮球（连续抽签）", AppConfig.BallPinned, v =>
+            m.AddCheck("固定悬浮球", AppConfig.BallPinned, v =>
             {
                 AppConfig.BallPinned = v; AppConfig.Save();
                 SetPinned(v);
@@ -258,7 +328,15 @@ namespace LuckyPickerWpf
             m.AddSeparator();
             m.AddItem("隐藏悬浮球", () => { activeCtxMenu = null; onHideSelf?.Invoke(); });
             m.AddItem("退出程序", () => { activeCtxMenu = null; onQuit?.Invoke(); });
-            m.Show(this);
+            m.ShowBeside(this);            // 贴着球弹出（不再依赖相对定位）
+        }
+
+        /// <summary>自检用：弹出右键菜单并返回它。</summary>
+        public ModernMenu? ShowContextMenuForTest()
+        {
+            activeCtxMenu = null;
+            ShowContextMenu();
+            return activeCtxMenu;
         }
 
         /// <summary>
@@ -266,61 +344,148 @@ namespace LuckyPickerWpf
         /// </summary>
         public void AutoHideAfterPick()
         {
+            Touch();
             if (AppConfig.BallPinned) { WakeUp(); return; }
             var t = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
             t.Tick += (s, e) => { t.Stop(); TuckToEdge(); };
             t.Start();
         }
 
-        /// <summary>贴边收起：平滑滑到最近的屏幕边缘并只露出一部分（保留可点击区域）。</summary>
+        /// <summary>贴边收起：平滑滑到最近的屏幕边缘并只露出一小部分（保留可点击区域）。</summary>
         public void TuckToEdge()
         {
             try
             {
-                var wa = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
+                var wa = WorkAreaDip();
                 bool nearRight = Left + Width / 2 > wa.Left + wa.Width / 2;
                 double toTop = Math.Max(wa.Top + 8, Math.Min(Top, wa.Bottom - Height - 8));
-                double toLeft = nearRight ? wa.Right - Width * 0.35 : wa.Left - Width * 0.65;
+                // 只露出球体的 35%（按球体本身而非窗口计算，窗口含 ShadowPad 留白）
+                double show = ballSize * 0.35;
+                double toLeft = nearRight
+                    ? wa.Right - show - ShadowPad
+                    : wa.Left + show - ballSize - ShadowPad;
                 AnimateMoveTo(toLeft, toTop);
                 WakeUp();
             }
             catch { }
         }
 
-        /// <summary>固定状态：固定时保持活跃（不变淡、抽完不收起），并更新描边视觉。</summary>
+        /// <summary>
+        /// 固定状态：固定只影响"抽完是否自动贴边收起"，不影响空闲渐隐
+        /// （渐隐是纯视觉减扰，球体仍始终可点击/可拖动）。
+        /// </summary>
         public void SetPinned(bool value)
         {
             try
             {
                 pinned = value;
+                // 固定只用一条细描边区分，不再用高对比粗黑边（降低"嘈杂"）
                 ballBorder.BorderBrush = value
-                    ? new SolidColorBrush(Color.FromRgb(15, 23, 42))
-                    : new SolidColorBrush(Color.FromArgb(160, 235, 255, 255));
-                ballBorder.BorderThickness = new Thickness(value ? 2.5 : 1.5);
-                ballBorder.ToolTip = "YBH幸运摇人器" + (value ? "（已固定：始终可交互）" : "（未固定：闲时变淡、抽完贴边）");
+                    ? new SolidColorBrush(Accent)
+                    : new SolidColorBrush(Color.FromArgb(210, 0xFF, 0xFF, 0xFF));
+                ballBorder.BorderThickness = new Thickness(value ? 2 : 1);
+                ballBorder.ToolTip = "YBH幸运摇人器"
+                    + (value ? "（已固定：抽完不贴边；闲时渐隐后移入即恢复）"
+                             : "（未固定：抽完贴边收起；闲时渐隐）");
 
-                if (value)
-                {
-                    idleTimer?.Stop();
-                    idleDimmed = false;
-                    AnimateOpacity(1.0, 200);
-                }
-                else
-                {
-                    StartIdle();
-                }
+                // 状态切换后给一次视觉反馈，随后重新开始空闲计时
+                WakeUp();
+                lastActive = DateTime.Now;
             }
             catch { }
         }
 
+        /// <summary>
+        /// 当前屏幕的工作区，单位统一为 DIP。
+        ///
+        /// 根因：WinForms 的 Screen.WorkingArea 是**设备像素**，而 WPF 窗口的
+        /// Left/Top/Width 是 **DIP**。旧代码直接混用两者，在 125% 缩放下
+        /// （屏幕 1920px = 1536 DIP）会把悬浮球甩到屏幕外（x≈1784 DIP ⇒ 2230px），
+        /// 结果球完全看不见。
+        /// </summary>
+        Rect WorkAreaDip()
+        {
+            try
+            {
+                var wa = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
+                double k = DpiScaleFactor();
+                if (k > 0 && Math.Abs(k - 1.0) > 0.001)
+                    return new Rect(wa.Left / k, wa.Top / k, wa.Width / k, wa.Height / k);
+                return new Rect(wa.Left, wa.Top, wa.Width, wa.Height);
+            }
+            catch { return new Rect(0, 0, 1920, 1080); }
+        }
+
+        [DllImport("user32.dll")] static extern uint GetDpiForWindow(IntPtr hwnd);
+
+        /// <summary>
+        /// 取屏幕缩放系数（DIP → 设备像素）。
+        ///
+        /// 注意：在窗口构造阶段（尚未 Show）PresentationSource 还不存在，
+        /// 此时若只用 PresentationSource 会拿到 Identity(1.0) 而静默算错，
+        /// 所以这里做了三级回退：自身 PresentationSource → Visual DPI → Win32 窗口 DPI。
+        /// </summary>
+        double DpiScaleFactor()
+        {
+            try
+            {
+                var src = PresentationSource.FromVisual(this);
+                if (src?.CompositionTarget != null)
+                {
+                    double m = src.CompositionTarget.TransformToDevice.M11;
+                    if (m > 0.01) return m;
+                }
+            }
+            catch { }
+            try
+            {
+                var d = VisualTreeHelper.GetDpi(this);
+                if (d.DpiScaleX > 0.01) return d.DpiScaleX;
+            }
+            catch { }
+            try
+            {
+                var hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    uint dpi = GetDpiForWindow(hwnd);
+                    if (dpi > 0) return dpi / 96.0;
+                }
+            }
+            catch { }
+            try
+            {
+                // 最后回退：主窗口的 PresentationSource（同进程同屏，缩放一致）
+                var mw = System.Windows.Application.Current?.MainWindow;
+                var src2 = mw != null ? PresentationSource.FromVisual(mw) : null;
+                if (src2?.CompositionTarget != null)
+                {
+                    double m2 = src2.CompositionTarget.TransformToDevice.M11;
+                    if (m2 > 0.01) return m2;
+                }
+            }
+            catch { }
+            return 1.0;
+        }
+
         void RestorePosition()
         {
-            var wa = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
+            var wa = WorkAreaDip();
             int x = AppConfig.BallX, y = AppConfig.BallY;
-            if (x <= -ballSize || x >= wa.Right || y <= -ballSize || y >= wa.Bottom)
+
+            // 坐标有效性判定，需要排除两类脏值：
+            //   1) AppConfig 的"未设置"哨兵 (-1,-1)：直接当坐标用会把球甩到屏幕左上角。
+            //      贴边收起时最小坐标是 -(ShadowPad + ballSize*0.35) ≤ -30，不可能恰好等于 -1，
+            //      因此 (-1,-1) 可作为安全的哨兵判断。
+            //   2) 旧版本单位混用（设备像素 ↔ DIP）写入的越界值，例如 125% 缩放下被吸到
+            //      屏幕外右侧的 x≈1784（屏幕仅 1536 DIP 宽）。
+            bool sentinel = (x == -1 && y == -1);
+            bool reachable = x + Width > 24 && x <= wa.Right - 24
+                             && y + Height > 24 && y <= wa.Bottom - 24;
+            if (sentinel || !reachable)
             {
-                x = (int)(wa.Right - ballSize - 24);
-                y = wa.Top + wa.Height / 3;
+                x = (int)(wa.Right - Width - 24);
+                y = (int)(wa.Top + wa.Height / 3);
             }
             Left = x; Top = y;
         }
@@ -333,16 +498,17 @@ namespace LuckyPickerWpf
             AppConfig.Save();
         }
 
-        /// <summary>靠边吸附：接近屏幕边缘时贴边并收进边框一部分（露出约 65%）。</summary>
+        /// <summary>靠边吸附：接近屏幕边缘时贴边并收进一部分（球体露出约 65%）。</summary>
         void SnapToEdgeIfNeeded()
         {
             try
             {
-                var wa = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
+                var wa = WorkAreaDip();
                 double w = Width, h = Height;
                 int margin = 28;
-                if (Left < wa.Left + margin) Left = wa.Left - w * 0.35;
-                else if (Left + w > wa.Right - margin) Left = wa.Right - w * 0.65;
+                double hidden = ballSize * 0.35;      // 收进后隐藏的球体宽度
+                if (Left < wa.Left + margin) Left = wa.Left - ShadowPad - hidden;
+                else if (Left + w > wa.Right - margin) Left = wa.Right - ShadowPad - (ballSize - hidden);
                 if (Top < wa.Top + margin) Top = wa.Top;
                 else if (Top + h > wa.Bottom - margin) Top = wa.Bottom - h;
             }
@@ -355,11 +521,13 @@ namespace LuckyPickerWpf
             {
                 downPos = e.GetPosition(this);
                 dragging = false;
+                lastActive = DateTime.Now;
             }
         }
 
         void OnBallMouseMove(object s, MouseEventArgs e)
         {
+            Touch();
             if (e.LeftButton != MouseButtonState.Pressed) return;
             var p = e.GetPosition(this);
             if (!dragging && (Math.Abs(p.X - downPos.X) + Math.Abs(p.Y - downPos.Y)) > 5)
@@ -376,7 +544,7 @@ namespace LuckyPickerWpf
         {
             if (e.ChangedButton != MouseButton.Left) return;
             if (dragging) { dragging = false; SavePosition(); return; }
-            WakeUp();
+            Touch();
             onClicked();
         }
 
@@ -385,10 +553,11 @@ namespace LuckyPickerWpf
         {
             ballSize = Math.Max(64, Math.Min(160, d));
             AppConfig.BallDiameter = (int)ballSize;
-            Width = ballSize; Height = ballSize;
-            ballBorder.Width = ballSize - 6;
-            ballBorder.Height = ballSize - 6;
-            ballBorder.CornerRadius = new CornerRadius((ballSize - 6) / 2);
+            Width = ballSize + ShadowPad * 2;
+            Height = ballSize + ShadowPad * 2;
+            ballBorder.Width = ballSize;
+            ballBorder.Height = ballSize;
+            ballBorder.CornerRadius = new CornerRadius(ballSize / 2);
             faceText.FontSize = Math.Max(13, ballSize * 0.30);
             SavePosition();
         }
@@ -397,6 +566,7 @@ namespace LuckyPickerWpf
         public void ShowPicked(string text)
         {
             if (string.IsNullOrEmpty(text)) return;
+            Touch();
             var parts = text.Split('、');
             string show = parts.Length > 1 ? parts.Length + "人" : (parts[0].Length > 5 ? parts[0].Substring(0, 4) + "…" : parts[0]);
             double k = ballSize / 96.0;
@@ -414,12 +584,76 @@ namespace LuckyPickerWpf
         public bool HasScaleTransform => ballBorder.RenderTransform is TransformGroup tg
                                          && tg.Children.Count > 0 && tg.Children[0] is ScaleTransform;
         public double ScaleNow => ballScale.ScaleX;
+
+        /// <summary>球外留白（= 投影可用空间），自检用。</summary>
+        public double ShadowPadNow => (Width - ballBorder.Width) / 2;
+
+        /// <summary>自检用：模拟一次交互（等价于鼠标进入/移动），用于验证空闲变淡可被打断恢复。</summary>
+        public void TouchForTest() => Touch();
+
+        /// <summary>自检用：模拟鼠标悬停在球上（悬停期间应保持不透明）。</summary>
+        public void HoverForTest(bool on) { hovering = on; if (on) Touch(); else lastActive = DateTime.Now; }
+
+        /// <summary>自检用：渐隐期间是否仍可交互（窗口可见 + 球体参与命中测试）。</summary>
+        public bool InteractiveNow
+        {
+            get
+            {
+                try { return IsVisible && ballBorder.IsHitTestVisible && ballBorder.IsEnabled; }
+                catch { return false; }
+            }
+        }
+
+        public bool IsDimmedNow => idleDimmed;
+
+        /// <summary>
+        /// 诊断快照（--fadewatch 模式逐秒落盘用）：把决定渐隐与否的每个条件都摊开，
+        /// 用于区分「定时器没跑」和「守卫条件恒真」这两类完全不同的故障。
+        /// </summary>
+        public string DiagNow
+        {
+            get
+            {
+                try
+                {
+                    return string.Format(
+                        "opacity={0:F3} dimmed={1} age={2:F1}s dragging={3} hovering={4} panelOpen={5} ctxMenu={6} pinned={7}",
+                        ballBorder.Opacity, idleDimmed,
+                        (DateTime.Now - lastActive).TotalSeconds,
+                        dragging, hovering, BallQuickPanel.IsOpen, activeCtxMenu != null, pinned);
+                }
+                catch (Exception ex) { return "diag-err:" + ex.Message; }
+            }
+        }
+
+        /// <summary>球体渐变各色标的平均亮度（0~1），自检用：应偏浅色。</summary>
+        public double BrushLuminanceNow
+        {
+            get
+            {
+                try
+                {
+                    if (ballBorder.Background is RadialGradientBrush g)
+                    {
+                        double sum = 0;
+                        foreach (var st in g.GradientStops)
+                            sum += (0.299 * st.Color.R + 0.587 * st.Color.G + 0.114 * st.Color.B) / 255.0;
+                        return sum / Math.Max(1, g.GradientStops.Count);
+                    }
+                    if (ballBorder.Background is SolidColorBrush s)
+                        return (0.299 * s.Color.R + 0.587 * s.Color.G + 0.114 * s.Color.B) / 255.0;
+                }
+                catch { }
+                return -1;
+            }
+        }
     }
 
     // ---------------- 班级快捷选择小窗 ----------------
     public class ClassMiniWindow : Window
     {
         const int W = 236;
+        const int PAD = 10;      // 投影留白
         readonly Action<string, bool> onPick;
 
         public ClassMiniWindow(IEnumerable<string> ids, Dictionary<string, string> names, Action<string, bool> pick)
@@ -431,7 +665,7 @@ namespace LuckyPickerWpf
             Topmost = true;
             ShowInTaskbar = false;
             ResizeMode = ResizeMode.NoResize;
-            Width = W;
+            Width = W + PAD * 2;
 
             var panel = new StackPanel();
             panel.Children.Add(new TextBlock { Text = "选择班级", FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) });
@@ -468,17 +702,19 @@ namespace LuckyPickerWpf
 
             var card = new Border
             {
+                Width = W,
                 Background = Brushes.White,
                 BorderBrush = new SolidColorBrush(Color.FromRgb(147, 197, 253)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(16),
                 Padding = new Thickness(14, 12, 14, 12),
-                Child = panel
+                Child = panel,
+                Effect = new DropShadowEffect { Color = Color.FromArgb(60, 0x1E, 0x3A, 0x8A), BlurRadius = 16, ShadowDepth = 2, Direction = 270 }
             };
-            Content = card;
+            Content = new Grid { Margin = new Thickness(PAD), Children = { card } };
 
             int count = CountOf(ids);
-            Height = 64 + count * 50 + 26;
+            Height = 64 + count * 50 + 26 + PAD * 2;
             Deactivated += (s, e) => { try { Close(); } catch { } };
         }
 
@@ -503,13 +739,11 @@ namespace LuckyPickerWpf
             return tpl;
         }
 
+        /// <summary>显示在锚点窗口（悬浮球）旁边；单位为 DIP，垂直居中对齐。</summary>
         public void ShowNear(Window anchor)
         {
-            var wa = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
-            double x, y = Math.Max(wa.Top + 8, anchor.Top - 10);
-            if (anchor.Left - W - 10 >= wa.Left) x = anchor.Left - W - 10;
-            else x = Math.Min(anchor.Left + anchor.Width + 10, wa.Right - W - 8);
-            y = Math.Min(y, wa.Bottom - Height - 8);
+            double w = Width, h = Height;
+            Geometry.PlaceBesideWindow(anchor, w, h, out double x, out double y);
             Left = x; Top = y;
             try { Show(); Activate(); } catch { }
         }
@@ -518,9 +752,13 @@ namespace LuckyPickerWpf
     // ---------------- 悬浮球快捷面板（防误触：点击球先弹面板，不直接抽取） ----------------
     public class BallQuickPanel : Window
     {
-        const int W = 176;
+        const int W = 188;       // 卡片宽度
+        const int PAD = 10;      // 投影留白
         static BallQuickPanel? current;              // 单例
         static DateTime suppressUntil = DateTime.MinValue;   // 因"点击悬浮球"而关闭后的抑制窗口
+
+        /// <summary>最近一次面板的屏幕 DIP 位置（自检/诊断用）。</summary>
+        public static Point? LastPanelPos { get; private set; }
 
         /// <summary>显示/收起快捷面板（toggle）。点击悬浮球时：已开→收起，未开→弹出。</summary>
         public static void ShowPanel(Action pickOne, Action showMain, bool pinned, Action<bool> onPinChanged, Window? anchor)
@@ -548,6 +786,9 @@ namespace LuckyPickerWpf
         /// <summary>面板是否已开。</summary>
         public static bool IsOpen => current != null;
 
+        /// <summary>当前面板窗口（自检/诊断用）。</summary>
+        public static Window? CurrentWindowForTest => current;
+
         /// <summary>外部命令：收起面板。</summary>
         public static void CloseIfOpen()
         {
@@ -563,17 +804,16 @@ namespace LuckyPickerWpf
             Topmost = true;
             ShowInTaskbar = false;
             ResizeMode = ResizeMode.NoResize;
-            Width = W;
+            Width = W + PAD * 2;
 
             var panel = new StackPanel();
             panel.Children.Add(new TextBlock
             {
-                Text = "YBH\n幸运摇人",
-                FontSize = 12.5, FontWeight = FontWeights.Bold,
+                Text = "幸运摇人",
+                FontSize = 13, FontWeight = FontWeights.Bold,
                 Foreground = new SolidColorBrush(Color.FromRgb(30, 64, 175)),
                 TextAlignment = TextAlignment.Center,
-                Margin = new Thickness(0, 2, 0, 8),
-                LineHeight = 17
+                Margin = new Thickness(0, 2, 0, 8)
             });
             // 主操作：抽一人（点击区域显著放大，圆角主按钮）
             var bigBtn = new Button
@@ -592,12 +832,12 @@ namespace LuckyPickerWpf
                 Dispatcher.BeginInvoke(new Action(() => pickOne?.Invoke()), DispatcherPriority.Background);
             };
             panel.Children.Add(bigBtn);
-            panel.Children.Add(MakeButton("更多功能", () => { Close(); showMain?.Invoke(); }));
+            panel.Children.Add(MakeButton("显示主窗口", () => { Close(); showMain?.Invoke(); }));
 
-            // 固定悬浮窗（默认勾选）：勾选后「抽一人」不隐藏悬浮球，便于连续抽签
+            // 固定悬浮球：勾选后「抽一人」不收起，便于连续抽签
             var chkPin = new CheckBox
             {
-                Content = "📌 固定悬浮窗（连续抽签）", IsChecked = pinned, FontSize = 11,
+                Content = "固定悬浮球", IsChecked = pinned, FontSize = 11,
                 Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)), Margin = new Thickness(0, 6, 0, 0)
             };
             chkPin.Checked += (s, e) => onPinChanged?.Invoke(true);
@@ -607,16 +847,34 @@ namespace LuckyPickerWpf
 
             var card = new Border
             {
+                Width = W,
                 Background = Brushes.White,
-                BorderBrush = new SolidColorBrush(Color.FromRgb(147, 197, 253)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(191, 214, 245)),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(10, 10, 10, 8),
                 Child = panel,
-                Effect = new DropShadowEffect { Color = Color.FromArgb(70, 0, 0, 0), BlurRadius = 14, ShadowDepth = 2, Direction = 270 }
+                Effect = new DropShadowEffect { Color = Color.FromArgb(60, 0x1E, 0x3A, 0x8A), BlurRadius = 16, ShadowDepth = 2, Direction = 270 }
             };
-            Content = card;
+            card.RenderTransform = new TranslateTransform(0, 8);
+            card.Opacity = 0;
+            Content = new Grid { Margin = new Thickness(PAD), Children = { card } };
             SizeToContent = SizeToContent.Height;   // 自适应高度，确保所有项完整可见
+
+            // 入场动效：淡入 + 轻微上浮
+            Loaded += (s, e) =>
+            {
+                try
+                {
+                    var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+                    card.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation(1, TimeSpan.FromMilliseconds(140)));
+                    if (card.RenderTransform is TranslateTransform tt)
+                        tt.BeginAnimation(TranslateTransform.YProperty,
+                            new DoubleAnimation(0, TimeSpan.FromMilliseconds(180)) { EasingFunction = ease });
+                }
+                catch { }
+            };
 
             // 失焦关闭：若是"点击悬浮球"导致失焦，则记录抑制窗口，让该次点击表现为"收起"
             Deactivated += (s, e) =>
@@ -660,15 +918,66 @@ namespace LuckyPickerWpf
             return b;
         }
 
+        /// <summary>显示在悬浮球旁边（DIP 换算 + 屏幕边界夹取 + 面板高度实测）。</summary>
         public void ShowNear(Window anchor)
         {
-            var wa = System.Windows.Forms.Screen.PrimaryScreen.WorkingArea;
-            double x, y = Math.Max(wa.Top + 8, anchor.Top - 10);
-            if (anchor.Left - W - 10 >= wa.Left) x = anchor.Left - W - 10;
-            else x = Math.Min(anchor.Left + anchor.Width + 10, wa.Right - W - 8);
-            Left = x;
-            Top = Math.Min(y, wa.Bottom - Height - 8);
+            // 面板用 SizeToContent=Height，弹出前先量出真实高度，避免用 0 参与定位
+            double h = ActualHeight;
+            if (h <= 0 && Content is FrameworkElement fe)
+            {
+                fe.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                h = fe.DesiredSize.Height;
+            }
+            if (h <= 0) h = 150;
+
+            Geometry.PlaceBesideWindow(anchor, Width, h, out double x, out double y);
+            Left = x; Top = y;
+            LastPanelPos = new Point(x, y);
             try { Show(); Activate(); } catch { }
+        }
+    }
+
+    // ---------------- 屏幕定位辅助 ----------------
+    internal static class Geometry
+    {
+        /// <summary>
+        /// 把一个 w×h 的窗口放到 anchor 窗口旁边（优先右侧，放不下则左侧；垂直居中对齐）。
+        /// 全部使用 DIP，并用 anchor 的屏幕工作区做边界夹取 —— 旧实现把 device 像素
+        /// 的 WorkingArea 和 DIP 的窗口坐标混用，导致菜单/面板位置偏移。
+        /// </summary>
+        public static void PlaceBesideWindow(Window anchor, double w, double h, out double x, out double y)
+        {
+            double ax = anchor.Left, ay = anchor.Top, aw = anchor.Width, ah = anchor.Height;
+            const double gap = 10;
+
+            double L = 0, T = 0, R = 1920, B = 1080;
+            try
+            {
+                var src = PresentationSource.FromVisual(anchor);
+                Matrix toDev = Matrix.Identity, toDip = Matrix.Identity;
+                if (src?.CompositionTarget != null)
+                {
+                    toDev = src.CompositionTarget.TransformToDevice;
+                    toDip = src.CompositionTarget.TransformFromDevice;
+                }
+                var c = toDev.Transform(new Point(ax + aw / 2, ay + ah / 2));
+                var wa = System.Windows.Forms.Screen.FromPoint(
+                    new System.Drawing.Point((int)c.X, (int)c.Y)).WorkingArea;
+                var tl = toDip.Transform(new Point(wa.Left, wa.Top));
+                var br = toDip.Transform(new Point(wa.Right, wa.Bottom));
+                L = tl.X; T = tl.Y; R = br.X; B = br.Y;
+            }
+            catch { }
+
+            x = ax + aw + gap;
+            if (x + w > R - 4) x = ax - w - gap;
+            if (x < L + 4) x = L + 4;
+            if (x + w > R - 4) x = R - w - 4;
+
+            y = ay + (ah - h) / 2;
+            if (y < T + 4) y = T + 4;
+            if (y + h > B - 4) y = B - h - 4;
+            if (y < T + 4) y = T + 4;
         }
     }
 }
