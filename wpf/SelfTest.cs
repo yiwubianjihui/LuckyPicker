@@ -281,72 +281,92 @@ namespace LuckyPickerWpf
             A("4 快捷面板位置紧贴悬浮球（不漂移）", besideOk, besideDetail);
 
             // 4b 悬浮球右键菜单同样应贴在球旁
+            //    ⚠️ 断言一律用 **Win32 实测的真实屏幕矩形**（ActualRectPx / BallWindowRectPx），
+            //    不能用 LastScreenOffset —— 那是我们自己算出来的目标值。旧实现里目标值一直是对的，
+            //    是 Popup 没有照着摆，于是自检 43/43 全过、用户看到的菜单却跑到了屏幕左上角。
+            //    （教训与 Blog App 那轮一致：别断言自己假设可靠的中间信号，要断言最终产物。）
             var ballMenu = win.BallContextMenuForTest();
-            var bmPos = ballMenu?.LastScreenOffset;
-            var bmSize = ballMenu?.LastMenuSize;
+            Pump(260);
+            var ballRect = win.BallWindowRectPxForTest;
+            var bmRect = ballMenu?.ActualRectPx() ?? new Rect(0, 0, 0, 0);
             bool ballMenuOk = false;
-            string bmDetail = "ballMenuPos=null";
-            if (bmPos.HasValue && bmSize.HasValue)
+            string bmDetail = "ballMenu=null";
+            if (ballMenu != null && bmRect.Width > 0 && ballRect.Width > 0)
             {
-                double gapR = bmPos.Value.X - (bx + bw);
-                double gapL = bx - (bmPos.Value.X + bmSize.Value.Width);
-                bool gapOk = Math.Abs(gapR - 10) < 8 || Math.Abs(gapL - 10) < 8;
-                bool vOk = bmPos.Value.Y > by - 260 && bmPos.Value.Y < by + bw + 100;
-                bool onScreen = bmPos.Value.X >= 0 && bmPos.Value.Y >= 0;
+                double gapR = bmRect.Left - ballRect.Right;
+                double gapL = ballRect.Left - bmRect.Right;
+                bool gapOk = Math.Abs(gapR - 10 * scale) < 8 * scale || Math.Abs(gapL - 10 * scale) < 8 * scale;
+                bool vOk = bmRect.Top + bmRect.Height > ballRect.Top - 260 * scale
+                        && bmRect.Top < ballRect.Bottom + 120 * scale;
+                bool onScreen = bmRect.Left >= 0 && bmRect.Top >= 0
+                             && bmRect.Right <= screenW && bmRect.Bottom <= screenH;
                 ballMenuOk = gapOk && vOk && onScreen;
-                bmDetail = $"menu=({bmPos.Value.X:F0},{bmPos.Value.Y:F0}) w={bmSize.Value.Width:F0} " +
-                           $"ball=({bx:F0},{by:F0},{bw:F0}) gapR={gapR:F0} gapL={gapL:F0}";
+                bmDetail = $"实测菜单矩形=({bmRect.Left:F0},{bmRect.Top:F0},{bmRect.Width:F0}×{bmRect.Height:F0})px " +
+                           $"球=({ballRect.Left:F0},{ballRect.Top:F0},{ballRect.Width:F0})px gapR={gapR:F0} gapL={gapL:F0}";
             }
-            A("4b 悬浮球右键菜单贴在球旁", ballMenuOk, bmDetail);
+            A("4b 悬浮球右键菜单贴在球旁（Win32 实测矩形）", ballMenuOk, bmDetail);
             try { ballMenu?.Close(); } catch { }
             Pump(150);
 
-            // ---------- 2. 托盘菜单：设备像素 → DIP 换算 + 向上翻转 ----------
+            // 4c 悬浮球模糊修复：球体自身绝不能挂 Effect。
+            //    Effect 会把球体（渐变 + 1px 白描边 + 「摇」字）先渲染成一张中间位图再合成，
+            //    而球还要被 RenderTransform 缩放、窗口还要被亚像素移动 ⇒ 位图被反复重采样 ⇒ 发虚。
+            //    投影改由独立纯色层承担（它没有细节可丢）。
+            A("4c 球体自身不挂 Effect，投影由独立层承担",
+              !win.BallHasOwnEffectForTest && win.BallShadowHasEffectForTest && win.BallShadowSharesTransformForTest,
+              $"球体Effect={win.BallHasOwnEffectForTest}(应False) 投影层Effect={win.BallShadowHasEffectForTest}(应True) " +
+              $"共用变换={win.BallShadowSharesTransformForTest}(应True)");
+
+            // 4d 窗口必须落在整数设备像素上 —— 含透明通道的窗口在非整像素位置会被 DWM 重采样，
+            //    125% 缩放下 1 设备像素 = 0.8 DIP，Left 只要不是 0.8 的整数倍就中招。
+            A("4d 悬浮球窗口对齐整数设备像素",
+              win.BallOnWholePixelForTest,
+              $"Left={win.BallLeftForTest:F2} Top={win.BallTopForTest:F2} scale={win.BallDpiScaleForTest:F2} " +
+              $"⇒ Left×scale={win.BallLeftForTest * win.BallDpiScaleForTest:F3}(应为整数)");
+
+            // ---------- 2. 托盘菜单：贴图标弹出 + 向上翻转 ----------
+            // ⚠️ 全部用 **Win32 实测的真实屏幕矩形**（设备像素）断言。
+            //    旧实现用 LastScreenOffset（我们自己算的目标值）断言，于是"目标对、实际错"
+            //    的 bug 一路绿灯通过 —— 用户看到的正是这个：菜单跑到屏幕左上角。
             int cx = screenW - 60, cy = screenH - 24;         // 模拟托盘图标位置（右下角，设备像素）
             var trayMenu = win.ShowTrayMenuForTest(cx, cy);
-            Pump(200);
-            var off = trayMenu?.LastScreenOffset;
-            var msz = trayMenu?.LastMenuSize;
-            bool has = off.HasValue;
-            double expX = cx / scale, expY = cy / scale;
-            // 水平：菜单右对齐鼠标；若右侧越界则左移（x <= 鼠标DIP，且不为负）
-            bool notRightOfCursor = has && off!.Value.X <= expX + 1 && off.Value.X >= 0;
-            bool aboveCursor = has && off!.Value.Y < expY;         // 托盘在底部 → 应向上弹
-            bool insideScreen = has && off!.Value.Y >= 0 && off.Value.X >= 0;
-            double oldBuggyX = cx, oldBuggyY = cy;                  // 旧实现（像素直接当 DIP）会落在
-            bool differsFromBug = has && Math.Abs(off!.Value.Y - oldBuggyY) > 10;
-            A("2a 托盘菜单按 DIP 定位（非像素直用）", has && notRightOfCursor,
-              has ? $"offset=({off!.Value.X:F0},{off!.Value.Y:F0}) 鼠标DIP≈({expX:F0},{expY:F0})" : "no offset");
-            A("2b 底部托盘菜单向上翻转不越界", aboveCursor && insideScreen,
-              has ? $"y={off!.Value.Y:F0} < cursorY={expY:F0}, 旧实现会落在 y={oldBuggyY}" : "no offset");
-            A("2c 与旧(错误)行为明显不同", differsFromBug,
-              has ? $"newY={off!.Value.Y:F0} vs buggyY={oldBuggyY}" : "no offset");
-            // 菜单边缘应贴着托盘图标（横向贴合，间距 < 8 DIP）
-            bool nearIcon = has && msz.HasValue &&
-                            (Math.Abs(off!.Value.X - expX) < 8 || Math.Abs(off.Value.X + msz!.Value.Width - expX) < 8);
-            A("3a 菜单贴着托盘图标弹出（主窗口可见）", nearIcon,
-              has && msz.HasValue ? $"菜单 x∈[{off!.Value.X:F0},{off.Value.X + msz.Value.Width:F0}] 图标x={expX:F0}" : "no offset");
+            Pump(260);
+            var tr = trayMenu?.ActualRectPx() ?? new Rect(0, 0, 0, 0);
+            bool has = trayMenu != null && tr.Width > 0;
+
+            // 2a 核心回归：菜单必须贴着托盘图标，而不是缩到屏幕左上角
+            bool nearIcon = has && (Math.Abs(tr.Left - cx) < 8 * scale || Math.Abs(tr.Right - cx) < 8 * scale);
+            A("2a 托盘菜单贴着托盘图标（Win32 实测，非左上角）", nearIcon,
+              has ? $"实测菜单矩形 x∈[{tr.Left:F0},{tr.Right:F0}]px 图标x={cx}px 菜单=({tr.Left:F0},{tr.Top:F0},{tr.Width:F0}×{tr.Height:F0})"
+                  : "菜单未落地");
+
+            // 2b 底部托盘 → 菜单应向上翻转；2c 且完整落在屏幕内
+            bool aboveCursor = has && tr.Bottom <= cy;
+            bool insideScreen = has && tr.Left >= 0 && tr.Top >= 0 && tr.Right <= screenW && tr.Bottom <= screenH;
+            A("2b 底部托盘菜单向上翻转（实测底边在图标上方）", aboveCursor && insideScreen,
+              has ? $"菜单底边={tr.Bottom:F0}px ≤ 图标y={cy}px；矩形=({tr.Left:F0},{tr.Top:F0})–({tr.Right:F0},{tr.Bottom:F0}) 屏幕={screenW}×{screenH}"
+                  : "菜单未落地");
+
             try { trayMenu?.Close(); } catch { }
             win.CloseTrayMenuForTest();
 
-            // 3b/3c 关键回归：主窗口"关闭到托盘"（Hide）后，菜单仍须正确定位
+            // 3b/3c 关键回归：主窗口"关闭到托盘"（Hide）后，菜单仍须正确定位 ——
+            //        这正是最初用 MainWindow 当 Popup 锚点而失效的场景。
             win.HideMainForTest();
-            Pump(200);
-            var trayMenu2 = win.ShowTrayMenuForTest(cx, cy);
             Pump(220);
-            var off2 = trayMenu2?.LastScreenOffset;
-            var msz2 = trayMenu2?.LastMenuSize;
-            bool has2 = off2.HasValue;
-            bool nearIcon2 = has2 && msz2.HasValue &&
-                             (Math.Abs(off2!.Value.X - expX) < 8 || Math.Abs(off2.Value.X + msz2!.Value.Width - expX) < 8);
-            bool sane2 = has2 && off2!.Value.Y >= 0 && off2.Value.X >= 0 && off2.Value.Y < expY;
-            A("3b 主窗口隐藏时菜单仍有有效定位（不再依赖隐藏的 MainWindow）", sane2,
-              has2 ? $"offset=({off2!.Value.X:F0},{off2!.Value.Y:F0})" : "no offset（旧实现此场景失效）");
-            A("3c 主窗口隐藏时菜单依旧贴着托盘图标", nearIcon2,
-              has2 && msz2.HasValue ? $"菜单 x∈[{off2!.Value.X:F0},{off2.Value.X + msz2.Value.Width:F0}] 图标x={expX:F0}" : "no offset");
+            var trayMenu2 = win.ShowTrayMenuForTest(cx, cy);
+            Pump(260);
+            var tr2 = trayMenu2?.ActualRectPx() ?? new Rect(0, 0, 0, 0);
+            bool has2 = trayMenu2 != null && tr2.Width > 0;
+            bool nearIcon2 = has2 && (Math.Abs(tr2.Left - cx) < 8 * scale || Math.Abs(tr2.Right - cx) < 8 * scale);
+            bool sane2 = has2 && tr2.Top >= 0 && tr2.Left >= 0 && tr2.Right <= screenW && tr2.Bottom <= screenH
+                         && tr2.Bottom <= cy;
+            A("3b 主窗口隐藏时菜单仍贴在托盘图标（不再依赖隐藏的 MainWindow）", sane2 && nearIcon2,
+              has2 ? $"实测矩形=({tr2.Left:F0},{tr2.Top:F0},{tr2.Width:F0}×{tr2.Height:F0})px 图标x={cx}px"
+                  : "菜单未落地（旧实现此场景失效）");
             win.CloseTrayMenuForTest();
             win.ShowMainForTest();
-            Pump(200);
+            Pump(220);
 
             // ---------- 1 + 4 + 6. 设置窗口 ----------
             win.OpenSettingsForTest();

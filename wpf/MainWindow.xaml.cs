@@ -1300,6 +1300,17 @@ namespace LuckyPickerWpf
         internal bool BallInteractiveForTest => ball?.InteractiveNow ?? false;
         internal bool BallDimmedForTest => ball?.IsDimmedNow ?? false;
 
+        // ---- Build 17：悬浮球模糊 & 菜单定位的观测点 ----
+        /** 球体自身挂 Effect ⇒ 会被光栅化后重采样 ⇒ 发虚。修好后应为 false。 */
+        internal bool BallHasOwnEffectForTest => ball?.HasOwnEffectNow ?? true;
+        internal bool BallShadowHasEffectForTest => ball?.ShadowHasEffectNow ?? false;
+        internal bool BallShadowSharesTransformForTest => ball?.ShadowSharesTransformNow ?? false;
+        internal bool BallOnWholePixelForTest => ball?.PositionOnWholePixelNow ?? false;
+        internal double BallDpiScaleForTest => ball?.DpiScaleNow ?? 1.0;
+        /** 悬浮球窗口的真实屏幕矩形（设备像素，Win32 口径）。 */
+        internal System.Windows.Rect BallWindowRectPxForTest =>
+            ball == null ? new System.Windows.Rect(0, 0, 0, 0) : ModernMenu.WindowRectPx(ball);
+
         /// <summary>自检用：还原悬浮球位置（避免自检把位置写脏）。直接赋值，不触发吸附与保存。</summary>
         internal void RestoreBallForTest(int x, int y)
         {

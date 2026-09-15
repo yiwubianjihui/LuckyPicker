@@ -64,6 +64,7 @@ namespace LuckyPickerWpf
         readonly Action showMain;           // 显示主窗口
 
         readonly Border ballBorder;         // 球体（浅色渐变圆）
+        readonly Border ballShadow;         // 投影层（球体下方，纯色块，承担 Effect）
         readonly ScaleTransform ballScale;  // 悬停/抽中缩放
         readonly TranslateTransform ballShift; // 贴边滑动
         readonly TextBlock faceText;
@@ -119,6 +120,10 @@ namespace LuckyPickerWpf
             faceLayer.Children.Add(faceText);
 
             double inner = ballSize;
+            // 球体与投影层共用同一个变换实例 —— 悬停缩放 / 抽中弹跳 / 贴边滑动
+            // 才会同步作用于投影，视觉上是一个整体。
+            var ballTransform = new TransformGroup { Children = { ballScale, ballShift } };
+
             ballBorder = new Border
             {
                 Width = inner, Height = inner,
@@ -130,16 +135,41 @@ namespace LuckyPickerWpf
                 Child = faceLayer,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                RenderTransform = new TransformGroup { Children = { ballScale, ballShift } },
+                UseLayoutRounding = true,
+                SnapsToDevicePixels = true,
+                RenderTransform = ballTransform,
+                RenderTransformOrigin = new Point(0.5, 0.5)
+                // ⚠️ 这里**绝对不能**挂 Effect。
+                //    Effect 会把球体（渐变 + 描边 + 「摇」字）先渲染成一张中间位图再合成，
+                //    而球还要被 RenderTransform 缩放、窗口还要被亚像素移动 ⇒ 位图被反复
+                //    重采样，看起来就是"糊"。这与本项目修「按钮文字模糊」时是同一个根因
+                //    （见 1a47fb2）。投影改由下面的 ballShadow 承担。
+            };
+
+            // 投影层：与球体同尺寸同位置、共用同一个变换，被球体完全盖住 ⇒ 只露出模糊的晕。
+            // 它是纯色块，被 Effect 光栅化没有任何细节损失，所以球体本身保持锐利。
+            ballShadow = new Border
+            {
+                Width = inner, Height = inner,
+                CornerRadius = new CornerRadius(inner / 2),
+                Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x3A, 0x8A)),
+                Opacity = 0.20,
+                IsHitTestVisible = false,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                RenderTransform = ballTransform,
                 RenderTransformOrigin = new Point(0.5, 0.5),
-                // 留白 8px 后投影不再被裁；数值克制，避免"嘈杂"
                 Effect = new DropShadowEffect
                 {
-                    Color = Color.FromRgb(0x1E, 0x3A, 0x8A), Opacity = 0.20,
+                    Color = Color.FromRgb(0x1E, 0x3A, 0x8A), Opacity = 1.0,
                     BlurRadius = 12, ShadowDepth = 1.5, Direction = 270
                 }
             };
-            Content = ballBorder;
+
+            var ballLayer = new Grid { UseLayoutRounding = true, SnapsToDevicePixels = true };
+            ballLayer.Children.Add(ballShadow);
+            ballLayer.Children.Add(ballBorder);
+            Content = ballLayer;
 
             // 抽中后的轻微脉冲（浅色系，收敛为 12 帧 ≈ 1.3s）
             flashTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(110) };
@@ -255,13 +285,36 @@ namespace LuckyPickerWpf
             catch { }
         }
 
+        /// <summary>
+        /// 把 DIP 坐标吸附到**整数设备像素**。
+        ///
+        /// 为什么要这么做：窗口含透明通道（AllowsTransparency）时，WPF 把整个窗口
+        /// 渲染成一张位图再交给 DWM 合成；窗口落在非整数设备像素上时，这张位图会被
+        /// 重采样一次 —— 球体的渐变、1px 白色描边和「摇」字都会发虚。
+        /// 125% 缩放下 1 设备像素 = 0.8 DIP，`Left` 只要不是 0.8 的整数倍就中招
+        /// （拖动、贴边滑动、DPI 复算都可能留下小数）。
+        /// </summary>
+        double SnapDip(double v)
+        {
+            double s = DpiScaleFactor();
+            return s > 0.01 ? Math.Round(v * s) / s : Math.Round(v);
+        }
+
+        /// <summary>统一的落位入口：所有 Left/Top 赋值都走这里，保证设备像素对齐。</summary>
+        void MoveTo(double left, double top)
+        {
+            Left = SnapDip(left);
+            Top = SnapDip(top);
+        }
+
         /// <summary>平滑移动悬浮球到目标位置（内容先滑动，动画结束后落到真实 Left/Top）。</summary>
         void AnimateMoveTo(double toLeft, double toTop)
         {
+            toLeft = SnapDip(toLeft); toTop = SnapDip(toTop);
             try
             {
                 double dx = toLeft - Left, dy = toTop - Top;
-                if (Math.Abs(dx) < 0.5 && Math.Abs(dy) < 0.5) { Left = toLeft; Top = toTop; return; }
+                if (Math.Abs(dx) < 0.5 && Math.Abs(dy) < 0.5) { MoveTo(toLeft, toTop); return; }
                 var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
                 var ax = new DoubleAnimation(0, dx, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease };
                 var ay = new DoubleAnimation(0, dy, TimeSpan.FromMilliseconds(240)) { EasingFunction = ease };
@@ -272,14 +325,14 @@ namespace LuckyPickerWpf
                         ballShift.BeginAnimation(TranslateTransform.XProperty, null);
                         ballShift.BeginAnimation(TranslateTransform.YProperty, null);
                         ballShift.X = 0; ballShift.Y = 0;
-                        Left = toLeft; Top = toTop;
+                        MoveTo(toLeft, toTop);
                     }
                     catch { }
                 };
                 ballShift.BeginAnimation(TranslateTransform.XProperty, ax);
                 ballShift.BeginAnimation(TranslateTransform.YProperty, ay);
             }
-            catch { try { Left = toLeft; Top = toTop; } catch { } }
+            catch { try { MoveTo(toLeft, toTop); } catch { } }
         }
 
         // ---------------- 状态 ----------------
@@ -487,14 +540,17 @@ namespace LuckyPickerWpf
                 x = (int)(wa.Right - Width - 24);
                 y = (int)(wa.Top + wa.Height / 3);
             }
-            Left = x; Top = y;
+            MoveTo(x, y);
         }
 
         void SavePosition()
         {
             SnapToEdgeIfNeeded();
-            AppConfig.BallX = (int)Left;
-            AppConfig.BallY = (int)Top;
+            // 拖动（DragMove）与 DPI 复算都可能把窗口丢在非整数设备像素上，
+            // 这里最后再吸附一次，保证「停在哪都清晰」。
+            MoveTo(Left, Top);
+            AppConfig.BallX = (int)Math.Round(Left);
+            AppConfig.BallY = (int)Math.Round(Top);
             AppConfig.Save();
         }
 
@@ -507,10 +563,12 @@ namespace LuckyPickerWpf
                 double w = Width, h = Height;
                 int margin = 28;
                 double hidden = ballSize * 0.35;      // 收进后隐藏的球体宽度
-                if (Left < wa.Left + margin) Left = wa.Left - ShadowPad - hidden;
-                else if (Left + w > wa.Right - margin) Left = wa.Right - ShadowPad - (ballSize - hidden);
-                if (Top < wa.Top + margin) Top = wa.Top;
-                else if (Top + h > wa.Bottom - margin) Top = wa.Bottom - h;
+                double nx = Left, ny = Top;
+                if (nx < wa.Left + margin) nx = wa.Left - ShadowPad - hidden;
+                else if (nx + w > wa.Right - margin) nx = wa.Right - ShadowPad - (ballSize - hidden);
+                if (ny < wa.Top + margin) ny = wa.Top;
+                else if (ny + h > wa.Bottom - margin) ny = wa.Bottom - h;
+                MoveTo(nx, ny);
             }
             catch { }
         }
@@ -558,6 +616,9 @@ namespace LuckyPickerWpf
             ballBorder.Width = ballSize;
             ballBorder.Height = ballSize;
             ballBorder.CornerRadius = new CornerRadius(ballSize / 2);
+            ballShadow.Width = ballSize;
+            ballShadow.Height = ballSize;
+            ballShadow.CornerRadius = new CornerRadius(ballSize / 2);
             faceText.FontSize = Math.Max(13, ballSize * 0.30);
             SavePosition();
         }
@@ -578,6 +639,34 @@ namespace LuckyPickerWpf
         }
 
         // ---------------- 自检/诊断访问器 ----------------
+
+        /// <summary>自检用：球体自身是否仍挂着 Effect（修复后应为 false —— 挂着就会发虚）。</summary>
+        public bool HasOwnEffectNow => ballBorder.Effect != null;
+
+        /// <summary>自检用：投影层是否承担了 Effect（应为 true）。</summary>
+        public bool ShadowHasEffectNow => ballShadow.Effect != null;
+
+        /// <summary>自检用：球体与投影层是否共用同一个变换实例（保证缩放/滑动同步）。</summary>
+        public bool ShadowSharesTransformNow =>
+            ReferenceEquals(ballBorder.RenderTransform, ballShadow.RenderTransform);
+
+        /// <summary>自检用：当前 DPI 缩放。</summary>
+        public double DpiScaleNow => DpiScaleFactor();
+
+        /// <summary>
+        /// 自检用：窗口左/上边是否落在**整数设备像素**上。
+        /// 非整数会触发透明窗口位图重采样 ⇒ 球体发虚，所以要把它变成可断言的事实。
+        /// </summary>
+        public bool PositionOnWholePixelNow
+        {
+            get
+            {
+                double s = DpiScaleFactor();
+                if (s <= 0.01) return true;
+                double dx = Left * s, dy = Top * s;
+                return Math.Abs(dx - Math.Round(dx)) < 0.02 && Math.Abs(dy - Math.Round(dy)) < 0.02;
+            }
+        }
         public bool IsPinnedNow => pinned;
         public double BallDiameterNow => ballSize;
         public double OpacityNow => ballBorder.Opacity;
