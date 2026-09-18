@@ -32,7 +32,14 @@ namespace LuckyPickerWpf
             AppDomain.CurrentDomain.UnhandledException += (s, ex) => Log("DOMAIN-EX: " + ex.ExceptionObject);
             TaskScheduler.UnobservedTaskException += (s, ex) => { Log("TASK-EX: " + ex.Exception); ex.SetObserved(); };
 
-            // ---------- 单实例保护：Mutex + 同名进程去重（双保险） ----------
+            // ---------- 单实例保护：以**命名互斥体**为唯一权威判据 ----------
+            //
+            // ⚠️ Build 15 曾在这里叠加「同名进程去重」当双保险（`others > 0` 也判定为
+            //    "已在运行"）。但那是个**竞态**：当两个实例几乎同时启动时（例如注册表
+            //    Run 里存在两个自启动值名），各自都能看到对方进程 ⇒ **双双弹
+            //    「已在运行」并退出，结果谁都起不来** —— 这正是用户报的
+            //    「开机弹提示、但程序不启动」。Build 18 把进程数降级为**诊断日志**，
+            //    不再参与判断。（互斥体随进程退出自动释放，不会像进程名那样被误判。）
             bool first;
             singleMutex = new System.Threading.Mutex(true, AppVersion.SingleInstanceMutex, out first);
             int others = 0;
@@ -45,8 +52,9 @@ namespace LuckyPickerWpf
                 }
             }
             catch { }
-            if (!first || others > 0)
+            if (!first)
             {
+                Log("ALREADY-RUNNING (mutex held; other same-name processes=" + others + ")");
                 bool notified = false;
                 try
                 {
@@ -63,6 +71,9 @@ namespace LuckyPickerWpf
                 Shutdown();
                 return;
             }
+            // 抢到互斥体 ⇒ 本实例是唯一的运行实例：顺手清掉遗留的自启动值名
+            // （老用户注册表里可能同时有 YBHLuckyPicker 与中文名，会把程序拉起两次）
+            AutoStart.CleanupLegacy();
 
             Log("S1");
             AppConfig.Load();

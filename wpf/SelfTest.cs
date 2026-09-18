@@ -460,6 +460,52 @@ namespace LuckyPickerWpf
             bool noEffectOnBigBtn = win.BigButtonsHaveNoEffectForTest();
             A("5 大按钮不再挂 DropShadowEffect（消除位图栅格化发虚）", noEffectOnBigBtn,
               "PickBtn/MultiBtn/NumBtn Effect 均为 null");
+
+            // ---------- 8. 开机自启动（Build 18 回归）----------
+            // 8a 开启后 IsEnabled() 必须为真。
+            //    早期实现把 Run 值 `"路径" /min` 直接 Trim('"',' ') 后当路径比较 ——
+            //    Trim 只去首尾引号，尾部残留 `" /min` ⇒ 永远不相等 ⇒ 永远返回 false，
+            //    表现为「勾选开机自启动后，重进设置页又变回未勾选」（所有设备都中）。
+            bool autoWas = AutoStart.IsEnabled();
+            AutoStart.SetEnabled(true);
+            bool afterOn = AutoStart.IsEnabled();
+            A("8a 开机自启动：开启后 IsEnabled() 为真（回归：Trim 解析导致永远 false）",
+              afterOn, $"开启前={autoWas} → 开启后={afterOn}");
+
+            // 8b 关闭后必须为假
+            AutoStart.SetEnabled(false);
+            bool afterOff = AutoStart.IsEnabled();
+            A("8b 开机自启动：关闭后 IsEnabled() 为假", !afterOff, $"关闭后={afterOff}");
+
+            // 8c 遗留中文值名必须被自动清理。
+            //    安装器早期版本把 Run 值名写成中文「YBH幸运摇人器」，主程序用
+            //    `YBHLuckyPicker` —— 两个值名并存 ⇒ 开机把程序拉起两次 ⇒
+            //    两个实例互相看到对方进程、双双退出 ⇒「弹提示但程序起不来」。
+            bool legacyCleaned = false;
+            string legacyDetail = "无法访问 Run 键";
+            try
+            {
+                using (var rk = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    @"Software\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    if (rk != null)
+                    {
+                        rk.SetValue("YBH幸运摇人器", "\"C:\\nonexistent\\LuckyPicker.exe\" /min");
+                        bool seeded = rk.GetValue("YBH幸运摇人器") != null;
+                        AutoStart.SetEnabled(true);      // 开关一次就应当顺手清掉遗留名
+                        bool gone = rk.GetValue("YBH幸运摇人器") == null;
+                        legacyCleaned = seeded && gone && AutoStart.IsEnabled();
+                        legacyDetail = $"塞入遗留名={seeded} 清理后仍在={!gone} 规范名生效={AutoStart.IsEnabled()}";
+                    }
+                }
+            }
+            catch (Exception ex) { legacyDetail = "异常: " + ex.Message; }
+            A("8c 开机自启动：遗留中文值名被自动清理（回归：两值名并存⇒开机启动两次⇒双双退出）",
+              legacyCleaned, legacyDetail);
+
+            // 还原用户原本的自启动设置
+            AutoStart.SetEnabled(autoWas);
+            Info("已还原开机自启动设置：" + autoWas);
         }
 
         static int ReadConfigInt(string key)
