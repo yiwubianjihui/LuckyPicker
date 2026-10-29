@@ -3,9 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
-        <SolidColorBrush x:Key="BrandBrush" Color="#2563EB" />
-        <SolidColorBrush x:Key="InkBrush" Color="#1F2B4E" />
+        <SolidColorBrush x:Key="BrandBrush" Color="#4F46E5" />
+        <SolidColorBrush x:Key="InkBrush" Color="#0F172A" />
         <SolidColorBrush x:Key="SubBrush" Color="#64748B" />
+        <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
+        <SolidColorBrush x:Key="SurfaceMutedBrush" Color="#F8FAFC" />
+        <SolidColorBrush x:Key="StrokeBrush" Color="#E2E8F0" />
+        <SolidColorBrush x:Key="BrandSoftBrush" Color="#EEF2FF" />
 
         <!-- 全局清晰度默认：抗锯齿模糊（系统缩放 100%~200% 均锐利） -->
         <Style TargetType="{x:Type Control}">
@@ -83,7 +87,7 @@
                     <ControlTemplate TargetType="ComboBox">
                         <Grid>
                             <Border x:Name="bd" Background="#FFFFFF" BorderBrush="#E2E8F0"
-                                    BorderThickness="1" CornerRadius="8" />
+                                    BorderThickness="1" CornerRadius="10" />
                             <ContentPresenter Margin="12,0,34,0" VerticalAlignment="Center"
                                               HorizontalAlignment="Left"
                                               Content="{TemplateBinding SelectionBoxItem}"
@@ -96,7 +100,7 @@
                                           BorderThickness="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                 <ToggleButton.Template>
                                     <ControlTemplate TargetType="ToggleButton">
-                                        <Border Background="Transparent" CornerRadius="8" />
+                                        <Border Background="Transparent" CornerRadius="10" />
                                     </ControlTemplate>
                                 </ToggleButton.Template>
                             </ToggleButton>
@@ -120,7 +124,7 @@
                                 <Setter TargetName="bd" Property="BorderBrush" Value="#B9C6DA" />
                             </Trigger>
                             <Trigger Property="IsDropDownOpen" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#2563EB" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="#4F46E5" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -146,7 +150,7 @@
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
                                             <Setter TargetName="bd" Property="Background" Value="#EFF6FF" />
-                                            <Setter Property="Foreground" Value="#1D4ED8" />
+                                            <Setter Property="Foreground" Value="#4338CA" />
                                             <Setter Property="FontWeight" Value="SemiBold" />
                                         </Trigger>
                                     </ControlTemplate.Triggers>
@@ -163,7 +167,7 @@
             <Setter Property="Height" Value="38" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="Background" Value="#2563EB" />
+            <Setter Property="Background" Value="#4F46E5" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="18,0,18,0" />
@@ -171,15 +175,15 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                CornerRadius="10" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#1D4ED8" />
+                                <Setter TargetName="bd" Property="Background" Value="#4338CA" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#1E40AF" />
+                                <Setter TargetName="bd" Property="Background" Value="#3730A3" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter TargetName="bd" Property="Background" Value="#93B4F5" />
@@ -202,7 +206,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                CornerRadius="10" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
                         <ControlTemplate.Triggers>

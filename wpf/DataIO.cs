@@ -210,9 +210,9 @@ namespace LuckyPickerWpf
         public static string NormalizeGender(string s)
         {
             if (s == null) return "";
-            if (s.Contains("男")) return "男";
-            if (s.Contains("女")) return "女";
-            return "";
+            if (s.Contains("男")) return "male";
+            if (s.Contains("女")) return "female";
+            return LuckyCore.NormalizeGender(s);
         }
 
         // 在首行中查找包含关键字的列

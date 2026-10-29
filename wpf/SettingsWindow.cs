@@ -27,7 +27,6 @@ namespace LuckyPickerWpf
         readonly Action rosterSaved;                       // 名单写入后 → 主窗刷新
         readonly Func<string, DataFile?> parseRoster;      // 解析导入文件
         readonly Action<List<string>> askPrefetch;         // 询问/执行语音缓存预生成
-        readonly Action showHistory;                       // 打开抽选记录（Owner = 本窗口）
         readonly Action<UpdateResult> showUpdateDownload;  // 下载安装器（Owner = 本窗口）
         readonly Action<string> speak;                     // 试听（用主窗 TTS 引擎）
         readonly Action onChangeDefaultClass;
@@ -40,6 +39,7 @@ namespace LuckyPickerWpf
         ComboBox defaultClassCombo;
         CheckBox chkAutoStart, chkBallVisible, chkBallPinned;
         bool loading = true;
+        int currentPage;
         const int IDX_GENERAL = 0, IDX_VOICE = 1, IDX_ROSTER = 2, IDX_HISTORY = 3, IDX_ABOUT = 4;
         readonly List<StackPanel> pages = new();
 
@@ -60,7 +60,7 @@ namespace LuckyPickerWpf
         public SettingsWindow(Window owner,
             Action applyVoice, Action ballChanged, Action rosterSaved,
             Func<string, DataFile?> parseRoster, Action<List<string>> askPrefetch,
-            Action showHistory, Action<UpdateResult> showUpdateDownload, Action<string> speak,
+            Action<UpdateResult> showUpdateDownload, Action<string> speak,
             Action changeDefaultClass, Action onQuit)
         {
             this.applyVoice = applyVoice;
@@ -68,7 +68,6 @@ namespace LuckyPickerWpf
             this.rosterSaved = rosterSaved;
             this.parseRoster = parseRoster;
             this.askPrefetch = askPrefetch;
-            this.showHistory = showHistory;
             this.showUpdateDownload = showUpdateDownload;
             this.speak = speak;
             onChangeDefaultClass = changeDefaultClass;
@@ -76,11 +75,12 @@ namespace LuckyPickerWpf
 
             Icon = owner.Icon;
             Title = "设置 · " + AppVersion.ProductName;
-            Width = 760; Height = 580;
-            MinWidth = 640; MinHeight = 460;
+            Width = 820; Height = 620;
+            MinWidth = 700; MinHeight = 500;
             WindowStartupLocation = WindowStartupLocation.CenterOwner;
             Owner = owner;
-            Background = new SolidColorBrush(Color.FromRgb(248, 250, 252));
+            Background = new SolidColorBrush(Color.FromRgb(245, 247, 251));
+            FontFamily = new FontFamily("Microsoft YaHei UI");
             UseLayoutRounding = true;
             SnapsToDevicePixels = true;
 
@@ -93,12 +93,12 @@ namespace LuckyPickerWpf
         void BuildLayout()
         {
             var root = new Grid();
-            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(186) });
+            root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(198) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var navBorder = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
+                Background = new SolidColorBrush(Color.FromRgb(248, 250, 252)),
                 BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
                 BorderThickness = new Thickness(0, 0, 1, 0),
                 Child = BuildNavPanel()
@@ -146,12 +146,12 @@ namespace LuckyPickerWpf
 
         StackPanel BuildNavPanel()
         {
-            var panel = new StackPanel { Margin = new Thickness(0, 14, 0, 0) };
+            var panel = new StackPanel { Margin = new Thickness(0, 20, 0, 0) };
             panel.Children.Add(new TextBlock
             {
-                Text = "YBH 幸运摇人器", FontSize = 14, FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(30, 64, 175)),
-                Margin = new Thickness(22, 0, 20, 2)
+                Text = "设置", FontSize = 22, FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
+                Margin = new Thickness(22, 0, 20, 3)
             });
             panel.Children.Add(new TextBlock
             {
@@ -163,7 +163,7 @@ namespace LuckyPickerWpf
             treeNav = new TreeView
             {
                 Background = Brushes.Transparent, BorderThickness = new Thickness(0),
-                Margin = new Thickness(12, 12, 12, 0),
+                Margin = new Thickness(12, 18, 12, 0),
                 ItemContainerStyle = BuildNavItemStyle()
             };
 
@@ -192,9 +192,9 @@ namespace LuckyPickerWpf
             var tpl = new ControlTemplate(typeof(TreeViewItem));
             var bd = new FrameworkElementFactory(typeof(Border));
             bd.Name = "Bd";
-            bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(9));
+            bd.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
             bd.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(TreeViewItem.BackgroundProperty));
-            bd.SetValue(Border.PaddingProperty, new Thickness(14, 9, 14, 9));
+            bd.SetValue(Border.PaddingProperty, new Thickness(14, 11, 14, 11));
             bd.SetValue(Border.MarginProperty, new Thickness(0, 2, 0, 2));
             var cp = new FrameworkElementFactory(typeof(ContentPresenter));
             cp.SetValue(ContentPresenter.ContentSourceProperty, "Header");
@@ -203,12 +203,12 @@ namespace LuckyPickerWpf
             tpl.VisualTree = bd;
 
             var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
-            hover.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(226, 232, 240)), "Bd"));
+            hover.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(241, 245, 249)), "Bd"));
             tpl.Triggers.Add(hover);
 
             var selected = new Trigger { Property = TreeViewItem.IsSelectedProperty, Value = true };
-            selected.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromArgb(38, 37, 99, 235)), "Bd"));
-            selected.Setters.Add(new Setter(Control.ForegroundProperty, new SolidColorBrush(Color.FromRgb(29, 78, 216))));
+            selected.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromRgb(238, 242, 255)), "Bd"));
+            selected.Setters.Add(new Setter(Control.ForegroundProperty, new SolidColorBrush(Color.FromRgb(67, 56, 202))));
             selected.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.SemiBold));
             tpl.Triggers.Add(selected);
 
@@ -226,7 +226,7 @@ namespace LuckyPickerWpf
             pageHost = new Grid();
             for (int i = 0; i < 5; i++)
             {
-                var page = new StackPanel { Margin = new Thickness(26, 22, 26, 16) };
+                var page = new StackPanel { Margin = new Thickness(30, 26, 30, 18) };
                 pages.Add(page);
                 pageHost.Children.Add(new ScrollViewer
                 {
@@ -265,11 +265,14 @@ namespace LuckyPickerWpf
         void ShowPage(int idx)
         {
             if (pageHost == null) return;
+            currentPage = idx;
             for (int i = 0; i < pageHost.Children.Count; i++)
                 pageHost.Children[i].Visibility = (i == idx) ? Visibility.Visible : Visibility.Collapsed;
             if (statusText != null && idx >= 0 && idx < PageHints.Length)
-                statusText.Text = PageHints[idx];   // 状态栏跟随当前页面
+                statusText.Text = PageHints[idx];
         }
+
+        internal void ShowHistory() => ShowPageForTest(IDX_HISTORY);
 
         // ==================== 常规 ====================
 
@@ -657,9 +660,7 @@ namespace LuckyPickerWpf
                 var classes = new Dictionary<string, string>(App.Core.classNames);
                 foreach (var s in list)
                     if (!classes.ContainsKey(s.classId)) classes[s.classId] = s.classId + "班";
-                Directory.CreateDirectory(LuckyCore.DataDir());
-                File.WriteAllText(LuckyCore.DataPath(),
-                    JsonSerializer.Serialize(new DataFile { classes = classes, students = list }));
+                LuckyCore.SaveDataFile(new DataFile { classes = classes, students = list });
                 rosterSaved?.Invoke();
                 SetRosterStatus("✓ 已保存 " + list.Count + " 名学生到 " + LuckyCore.DataPath());
                 statusText.Text = "✓ 名单已保存（" + list.Count + " 名学生）";
@@ -682,9 +683,7 @@ namespace LuckyPickerWpf
                     SetRosterStatus("未解析出学生，请检查文件格式（需含「姓名」列）。", true);
                     return;
                 }
-                Directory.CreateDirectory(LuckyCore.DataDir());
-                File.WriteAllText(LuckyCore.DataPath(),
-                    JsonSerializer.Serialize(new DataFile { classes = data.classes, students = data.students }));
+                LuckyCore.SaveDataFile(new DataFile { classes = data.classes, students = data.students });
                 rosterSaved?.Invoke();
                 ReloadRosterRows();
                 SetRosterStatus("✓ 已导入 " + data.students.Count + " 名学生并保存。");
@@ -734,11 +733,9 @@ namespace LuckyPickerWpf
             var row = new StackPanel { Orientation = Orientation.Horizontal };
             var btnReload = new Button { Content = "刷新", Width = 96, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("ModernBtnGhost") };
             btnReload.Click += (s, e) => { ReloadHistory(); statusText.Text = "记录已刷新"; };
-            var btnClear = new Button { Content = "清空记录", Width = 110, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("ModernBtnGhost") };
+            var btnClear = new Button { Content = "清空记录", Width = 110, Style = (Style)FindResource("ModernBtnGhost") };
             btnClear.Click += (s, e) => { HistoryStore.Clear(); ReloadHistory(); statusText.Text = "✓ 已清空抽选记录"; };
-            var btnOpen = new Button { Content = "在独立窗口查看…", Width = 160, Style = (Style)FindResource("ModernBtn") };
-            btnOpen.Click += (s, e) => showHistory?.Invoke();
-            row.Children.Add(btnReload); row.Children.Add(btnClear); row.Children.Add(btnOpen);
+            row.Children.Add(btnReload); row.Children.Add(btnClear);
             sp.Children.Add(row);
         }
 
@@ -894,8 +891,7 @@ namespace LuckyPickerWpf
             }
         }
 
-        /// <summary>自检用：打开一个子窗口（非模态，Owner=本窗口）。</summary>
-        internal void OpenChildForTest() => showHistory?.Invoke();
+        internal int CurrentPageForTest => currentPage;
 
         /// <summary>自检用：当前被勾选的"悬浮球大小"单选项数量（应为 1）。</summary>
         internal int BallSizeCheckedCountForTest => sizeRadios.Count(r => r.IsChecked == true);
@@ -922,9 +918,9 @@ namespace LuckyPickerWpf
 
         static TextBlock MakeSectionTitle(string text) => new TextBlock
         {
-            Text = text, FontSize = 17, FontWeight = FontWeights.SemiBold,
+            Text = text, FontSize = 20, FontWeight = FontWeights.SemiBold,
             Foreground = new SolidColorBrush(Color.FromRgb(15, 23, 42)),
-            Margin = new Thickness(0, 0, 0, 4)
+            Margin = new Thickness(0, 0, 0, 5)
         };
         static TextBlock MakeSubTitle(string text) => new TextBlock
         {

@@ -6,9 +6,9 @@
 //   返回 UTF-8 JSON：
 //   {
 //     "product":  "YBH幸运摇人器",
-//     "version":  "26H2 Build 13",     // 必填，展示给用户
-//     "build":    12,                   // 可选，建议填写，用于精确比较
-//     "channel":  "26H2",               // 可选
+//     "version":  "1.1+19",            // 必填，展示给用户
+//     "build":    19,                   // 可选，建议填写，用于精确比较
+//     "channel":  "1.1",                // 可选
 //     "url":      "https://你的网站/download.zip",  // 可选，新版本下载页
 //     "notes":    "1.新增...\n2.修复...",            // 可选，更新说明
 //     "releaseDate": "2025-06-01",      // 可选
@@ -36,9 +36,9 @@ namespace LuckyPickerWpf
     public static class AppVersion
     {
         public const string ProductName = "YBH幸运摇人器";
-        public const string Display = "26H2 Build 18";
-        public const string Channel = "26H2";
-        public const int Build = 18;
+        public const string Display = "1.1+19";
+        public const string Channel = "1.1";
+        public const int Build = 19;
         public const string UpdateUrlDefault = "https://lr.yibianhui.cn/update.json";
         // 备用接口：主接口失效时自动回退尝试（镜像站 / 历史地址）
         public const string UpdateUrlLegacy = "https://app.yibianhui.cn/luckypicker/update.json";
@@ -58,6 +58,7 @@ namespace LuckyPickerWpf
         public string Channel;
         public string DownloadUrl;
         public string SetupUrl = "";   // 安装程序直链（用于后台下载安装器）
+        public string SetupSha256 = "";
         public string Notes;
         public string ReleaseDate;
         public bool Mandatory;
@@ -71,7 +72,7 @@ namespace LuckyPickerWpf
             try { ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12; } catch { }
         }
 
-        // 检查更新。url 支持 http(s)://、file:/// 以及本机文件路径（便于上线前自测）。
+        // 检查更新。远程接口仅支持 HTTPS；file:/// 和本机路径用于上线前自测。
         public static UpdateResult Check(string url)
         {
             var res = new UpdateResult();
@@ -90,15 +91,19 @@ namespace LuckyPickerWpf
                     try { json = File.ReadAllText(new Uri(u).LocalPath, Encoding.UTF8); }
                     catch (Exception ex) { res.ErrorMessage = "读取本地更新文件失败：" + ex.Message; return res; }
                 }
-                else if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-                         u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                else if (u.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+                {
+                    res.ErrorMessage = "更新接口仅支持 HTTPS，请改用安全链接。";
+                    return res;
+                }
+                else if (u.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 {
                     json = HttpGetSmart(u, out res.ErrorMessage);
                     if (json == null) return res;
                 }
                 else
                 {
-                    if (!File.Exists(u)) { res.ErrorMessage = "更新接口地址无效：请填写 http(s) 链接或存在的本地 update.json 路径。"; return res; }
+                    if (!File.Exists(u)) { res.ErrorMessage = "更新接口地址无效：请填写 HTTPS 链接或存在的本地 update.json 路径。"; return res; }
                     try { json = File.ReadAllText(u, Encoding.UTF8); }
                     catch (Exception ex) { res.ErrorMessage = "读取本地更新文件失败：" + ex.Message; return res; }
                 }
@@ -345,7 +350,9 @@ namespace LuckyPickerWpf
                 res.LatestBuild = GetInt(root, "build", "buildNumber", "versionCode", "Build");
                 if (res.LatestBuild <= 0) res.LatestBuild = ExtractLastInt(res.LatestVersion);
                 res.Channel = GetString(root, "channel", "Channel");
-                res.DownloadUrl = NormalizeHttpUrl(GetString(root, "url", "downloadUrl", "download_url"));
+                res.DownloadUrl = NormalizeHttpsUrl(GetString(root, "url", "downloadUrl", "download_url"));
+                res.SetupUrl = NormalizeHttpsUrl(GetString(root, "setupUrl", "setup_url"));
+                res.SetupSha256 = GetString(root, "setupSha256", "setup_sha256", "sha256").ToLowerInvariant();
                 res.Notes = GetString(root, "notes", "note", "releaseNotes", "release_notes");
                 res.ReleaseDate = GetString(root, "releaseDate", "release_date", "date");
                 res.Mandatory = GetBool(root, "mandatory", "required");
@@ -430,7 +437,13 @@ namespace LuckyPickerWpf
             return sb.ToString();
         }
 
-        // 从 "26H2 Build 13" 这类字符串中提取最后一个整数（Build 号）。
+        static string NormalizeHttpsUrl(string url)
+        {
+            string normalized = NormalizeHttpUrl(url);
+            return Uri.TryCreate(normalized, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? normalized : "";
+        }
+
+        // 从 "1.1+19" 这类字符串中提取最后一个整数（Build 号）。
         public static int ExtractLastInt(string text)
         {
             if (string.IsNullOrEmpty(text)) return 0;

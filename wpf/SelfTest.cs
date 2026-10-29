@@ -71,8 +71,51 @@ namespace LuckyPickerWpf
             Dispatcher.PushFrame(frame);
         }
 
+        static void RunCoreChecks()
+        {
+            var core = new LuckyCore();
+            core.Load(new DataFile
+            {
+                students = new List<Student>
+                {
+                    new() { name = "甲", classId = "1", gender = "男" },
+                    new() { name = "乙", classId = "1", gender = "女" },
+                    new() { name = "丙", classId = "1", gender = "male" }
+                }
+            });
+            core.SetGender("male");
+            A("核心：中文与英文男性数据均可筛选", core.GetCandidates().Count == 2 && core.GetCandidates().All(s => s.gender == "male"));
+            core.SetGender("female");
+            A("核心：中文女性数据自动规范化", core.GetCandidates().Count == 1 && core.GetCandidates()[0].name == "乙");
+            A("核心：导入性别格式统一", ImportUtil.NormalizeGender("男生") == "male" && ImportUtil.NormalizeGender("女") == "female");
+
+            core.SetGender("all");
+            var picked = core.PickMulti(3);
+            A("核心：连抽不重复", picked.Count == 3 && picked.Select(s => s.name).Distinct().Count() == 3);
+            A("核心：不重复池用完后自动重置", core.PickOne() != null && core.remainPool.Count == 2);
+
+            string temp = Path.Combine(Path.GetTempPath(), "lucky-picker-selftest-" + Guid.NewGuid().ToString("N") + ".json");
+            try
+            {
+                JsonStorage.WriteAtomic(temp, "{\"value\":1}");
+                JsonStorage.WriteAtomic(temp, "{\"value\":2}");
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(temp));
+                A("核心：JSON 原子写入与替换", doc.RootElement.GetProperty("value").GetInt32() == 2);
+            }
+            catch (Exception ex) { A("核心：JSON 原子写入与替换", false, ex.Message); }
+            finally { try { File.Delete(temp); } catch { } }
+
+            A("版本：1.1+19 可提取构建号", UpdateManager.ExtractLastInt("1.1+19") == 19);
+            var update = UpdateManager.ParseJson("{\"version\":\"1.1+20\",\"build\":20,\"setupUrl\":\"https://example.com/setup.exe\",\"setupSha256\":\"ABC123\"}");
+            A("更新：解析安装直链与 SHA-256", update.Success && update.HasUpdate && update.SetupUrl == "https://example.com/setup.exe" && update.SetupSha256 == "abc123");
+            A("更新：拒绝 HTTP 下载地址", UpdateManager.ParseJson("{\"version\":\"1.0+19\",\"url\":\"http://example.com/setup.exe\"}").DownloadUrl == "");
+            A("更新：拒绝 HTTP 检查接口", !UpdateManager.Check("http://example.com/update.json").Success);
+            A("语音：可取消默认输出设备静音", AudioUnmute.DefaultOutput(), AudioUnmute.LastError);
+        }
+
         static void Execute(MainWindow win, string outPath)
         {
+            RunCoreChecks();
             var src = PresentationSource.FromVisual(win);
             double scale = 1.0;
             if (src?.CompositionTarget != null) scale = src.CompositionTarget.TransformToDevice.M11;
@@ -166,15 +209,16 @@ namespace LuckyPickerWpf
             A("8b 固定时抽完不贴边收起", samePos, $"L {left0:F0}->{win.BallLeftForTest:F0} T {top0:F0}->{win.BallTopForTest:F0}");
 
             // 固定状态同样应空闲渐隐（视觉减扰），且必须保持可交互 —— 这是"固定后渐隐失效"的修复点
+            win.BallHoverForTest(false);
             win.BallTouchForTest();
             Pump(400);
             double pinAwake = win.BallOpacityForTest;
-            Pump(5200);
+            Pump(5600);
             double pinDim = win.BallOpacityForTest;
             bool pinInteractive = win.BallInteractiveForTest;
             A("8c 固定时同样空闲渐隐（不再跳过渐隐）",
               pinAwake > 0.95 && pinDim < 0.5,
-              $"固定后 触发={pinAwake:F2} → 空闲5.2s={pinDim:F2}（旧实现在此恒为 1.00）");
+              $"固定后 触发={pinAwake:F2} → 空闲5.6s={pinDim:F2}（旧实现在此恒为 1.00）");
             A("8d 渐隐期间仍保持可交互（窗口可见+可命中）", pinInteractive,
               "visible=" + pinInteractive);
             // 渐隐态外观截图（对比用）
@@ -196,8 +240,9 @@ namespace LuckyPickerWpf
 
             AppConfig.BallPinned = false;
             win.ApplyBallSettings();
+            win.BallHoverForTest(false);
             win.BallTouchForTest();
-            Pump(5200);
+            Pump(5600);
             A("8f 取消固定后同样闲时渐隐", win.BallOpacityForTest < 0.95,
               "opacity=" + win.BallOpacityForTest.ToString("F2"));
             AppConfig.BallPinned = oldPin;
@@ -347,7 +392,18 @@ namespace LuckyPickerWpf
               has ? $"菜单底边={tr.Bottom:F0}px ≤ 图标y={cy}px；矩形=({tr.Left:F0},{tr.Top:F0})–({tr.Right:F0},{tr.Bottom:F0}) 屏幕={screenW}×{screenH}"
                   : "菜单未落地");
 
-            try { trayMenu?.Close(); } catch { }
+            win.HideTrayMenuForTest();
+            var reopened = win.ShowTrayMenuForTest(cx, cy);
+            A("2c 失焦自动关闭后下一次右键可直接重开", reopened != null && reopened.IsOpen,
+              "isOpen=" + (reopened?.IsOpen ?? false));
+            win.CloseTrayMenuForTest();
+
+            var cursorMenu = win.ShowTrayMenuAtCursorForTest(cx, cy);
+            var cr = cursorMenu?.ActualRectPx() ?? new Rect(0, 0, 0, 0);
+            bool cursorNear = cursorMenu != null && cr.Width > 0 &&
+                (Math.Abs(cr.Left - cx) < 8 * scale || Math.Abs(cr.Right - cx) < 8 * scale) && cr.Bottom <= cy;
+            A("2d 实际右键读取当前光标坐标（不使用失效事件坐标）", cursorNear,
+              $"菜单=({cr.Left:F0},{cr.Top:F0},{cr.Width:F0}×{cr.Height:F0}) 光标=({cx},{cy})");
             win.CloseTrayMenuForTest();
 
             // 3b/3c 关键回归：主窗口"关闭到托盘"（Hide）后，菜单仍须正确定位 ——
@@ -394,7 +450,7 @@ namespace LuckyPickerWpf
                   strayEditor == null ? "无独立窗口" : "发现 " + strayEditor.Title);
 
                 bool rounded = win.SettingsNavRoundedForTest(sw);
-                A("4 左栏选中项圆角（自定义 TreeViewItem 模板）", rounded, "CornerRadius=9 的选中 Border");
+                A("4 左栏选中项圆角（自定义 TreeViewItem 模板）", rounded, "CornerRadius=10 的选中 Border");
 
                 // 2. 悬浮球大小单选：任意时刻只能勾选一项（此前每项 GroupName 唯一 → 全选）
                 sw.ShowPageForTest(0);
@@ -441,18 +497,16 @@ namespace LuckyPickerWpf
                 Pump(250);
                 A("截图 设置窗口 5 个分类页", shots == 5, shots + "/5 张 → " + shotDir);
 
-                // 6. 子窗口随父窗口关闭
-                win.SettingsOpenChildForTest(sw);
-                Pump(900);
-                var child = Application.Current.Windows.OfType<Window>()
-                    .FirstOrDefault(w => w.Title != null && w.Title.Contains("抽选记录"));
-                A("6a 设置窗口可打开子窗口（非模态）", child != null, child?.Title ?? "null");
+                win.OpenHistoryForTest();
+                Pump(300);
+                A("6a 抽选记录作为设置内独立导航页打开", win.SettingsCurrentPageForTest(sw) == 3,
+                  "page=" + win.SettingsCurrentPageForTest(sw));
+                bool historyChild = Application.Current.Windows.OfType<Window>()
+                    .Any(w => w.Title != null && w.Title == "抽选记录" && w.IsVisible);
+                A("6b 不再弹出重复的抽选记录子窗口", !historyChild, "childWindow=" + historyChild);
                 sw.Close();
                 Pump(900);
-                bool childGone = !Application.Current.Windows.OfType<Window>()
-                    .Any(w => w.Title != null && w.Title.Contains("抽选记录") && w.IsVisible);
                 bool settingsGone = win.SettingsWindowForTest == null;
-                A("6b 关闭设置窗口时子窗口一并关闭", childGone, "childGone=" + childGone);
                 A("6c 设置窗口引用已释放", settingsGone, "settingsWin=" + (settingsGone ? "null" : "非空"));
             }
 
@@ -529,12 +583,15 @@ namespace LuckyPickerWpf
             {
                 if (w.Content is not FrameworkElement root) return false;
                 root.UpdateLayout();
-                int cw = (int)Math.Ceiling(root.ActualWidth);
-                int ch = (int)Math.Ceiling(root.ActualHeight);
+                double cw = root.ActualWidth + root.Margin.Left + root.Margin.Right;
+                double ch = root.ActualHeight + root.Margin.Top + root.Margin.Bottom;
                 if (cw <= 0 || ch <= 0) return false;
+                var transform = PresentationSource.FromVisual(w)?.CompositionTarget?.TransformToDevice;
+                double sx = transform?.M11 ?? 1, sy = transform?.M22 ?? 1;
                 var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
-                    cw, ch, 96, 96, PixelFormats.Pbgra32);
-                rtb.Render(root);
+                    (int)Math.Ceiling(cw * sx), (int)Math.Ceiling(ch * sy),
+                    96 * sx, 96 * sy, PixelFormats.Pbgra32);
+                rtb.Render(w);
                 var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
                 enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rtb));
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);

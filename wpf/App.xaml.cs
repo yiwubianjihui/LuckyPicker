@@ -90,7 +90,8 @@ namespace LuckyPickerWpf
                 }
             }
             catch { }
-            if (!Loaded) Core.Load(LuckyCore.LoadDataFile());
+            string? rosterLoadError = null;
+            if (!Loaded) Core.Load(LuckyCore.LoadDataFile(out rosterLoadError));
             Log("S3");
             BootMinimized = e.Args != null && Array.Exists(e.Args,
                 a => string.Equals(a, AutoStart.BootArg, StringComparison.OrdinalIgnoreCase));
@@ -124,6 +125,11 @@ namespace LuckyPickerWpf
                     catch { }
                     Shutdown();
                 }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }
+            else if (rosterLoadError != null)
+            {
+                Dispatcher.BeginInvoke(() => MessageBox.Show(MainWin, rosterLoadError,
+                    AppVersion.ProductName, MessageBoxButton.OK, MessageBoxImage.Warning));
             }
 
             // 空转诊断：--fadewatch <输出文件>

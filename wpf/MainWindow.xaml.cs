@@ -40,6 +40,7 @@ namespace LuckyPickerWpf
             catch { }
             App.Log("W-xaml");
             InitCore();
+            InitSpeech();
             App.Log("W-core");
             InitTray();
             ListenShowEvent();
@@ -75,7 +76,6 @@ namespace LuckyPickerWpf
             RefreshBadge();
             RefreshPoolStats();
             RenderBlockChips();
-            InitSpeech();
         }
 
         void InitSpeech()
@@ -125,6 +125,7 @@ namespace LuckyPickerWpf
         // ---------- 抽取 ----------
         async void OnPick(object sender, RoutedEventArgs e)
         {
+            AudioUnmute.DefaultOutput();
             var s = core.PickOne();
             if (s == null) { HintText.Text = "※ 当前无候选人（请检查名单 / 屏蔽 / 筛选）"; return; }
             await AnimatePickAsync(s.name);
@@ -135,11 +136,11 @@ namespace LuckyPickerWpf
 
         async void OnMulti(object sender, RoutedEventArgs e)
         {
+            AudioUnmute.DefaultOutput();
             var list = core.PickMulti(5);
             if (list.Count == 0) { HintText.Text = "※ 当前无候选人"; return; }
             var names = list.Select(x => x.name).ToList();
             await ShowMultiAsync(names);
-            // 逐姓名依次播报：每个姓名各自命中缓存（拼接整句会导致缓存永不命中）
             tts?.SpeakSequence(names);
             AddHistory(new HistoryEntry { time = Now(), text = "连抽： " + string.Join("、", names), classId = core.currentClassId });
             RefreshPoolStats();
@@ -193,11 +194,17 @@ namespace LuckyPickerWpf
                 {
                     MultiPanel.Children.Add(new Border
                     {
-                        Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(230, 240, 255)),
-                        CornerRadius = new CornerRadius(19),
-                        Padding = new Thickness(14, 8, 14, 8),
-                        Margin = new Thickness(0, 0, 8, 8),
-                        Child = new TextBlock { Text = n, FontSize = 14, FontWeight = FontWeights.Bold }
+                        Background = new SolidColorBrush(Color.FromRgb(238, 242, 255)),
+                        BorderBrush = new SolidColorBrush(Color.FromRgb(199, 210, 254)),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(12),
+                        Padding = new Thickness(16, 10, 16, 10),
+                        Margin = new Thickness(0, 0, 10, 10),
+                        Child = new TextBlock
+                        {
+                            Text = n, FontSize = 16, FontWeight = FontWeights.SemiBold,
+                            Foreground = new SolidColorBrush(Color.FromRgb(67, 56, 202))
+                        }
                     });
                 }
                 MultiPanel.Visibility = Visibility.Visible;
@@ -220,8 +227,8 @@ namespace LuckyPickerWpf
 
         void AddHistory(HistoryEntry entry)
         {
-            try { HistoryStore.Add(entry); } catch { }
-            HintText.Text = entry.text;
+            bool saved = HistoryStore.Add(entry);
+            HintText.Text = saved ? entry.text : entry.text + "（记录保存失败：" + HistoryStore.LastError + "）";
         }
 
         static string Now() => DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
@@ -260,10 +267,13 @@ namespace LuckyPickerWpf
                 string name = n;
                 var chip = new Button
                 {
-                    Content = n + " ✕", FontSize = 12, Padding = new Thickness(10, 3, 10, 3),
+                    Content = n + " ✕", FontSize = 12, Padding = new Thickness(11, 4, 11, 4),
                     Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand,
-                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(255, 237, 213)),
-                    BorderThickness = new Thickness(0)
+                    Background = new SolidColorBrush(Color.FromRgb(255, 247, 237)),
+                    Foreground = new SolidColorBrush(Color.FromRgb(154, 82, 22)),
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(254, 215, 170)),
+                    BorderThickness = new Thickness(1),
+                    Style = (Style)FindResource("GhostBtn")
                 };
                 chip.Click += (s, e) => { core.RemoveBlock(name); RenderBlockChips(); core.ResetPoolKeepLast(); RefreshPoolStats(); };
                 BlockChips.Children.Add(chip);
@@ -387,7 +397,7 @@ namespace LuckyPickerWpf
             else if (e.Key == Key.H && mod == ModifierKeys.Control)
             {
                 e.Handled = true;
-                ShowHistoryDialog();
+                OpenSettings(true);
             }
             else if (e.Key == Key.U && mod == ModifierKeys.Control)
             {
@@ -403,7 +413,7 @@ namespace LuckyPickerWpf
         }
 
         void OnMenuEditor(object sender, RoutedEventArgs e) => ShowEditorDialog();
-        void OnMenuHistory(object sender, RoutedEventArgs e) => ShowHistoryDialog();
+        void OnMenuHistory(object sender, RoutedEventArgs e) => OpenSettings(true);
         void OnMenuAbout(object sender, RoutedEventArgs e) => ShowAboutDialog();
 
 
@@ -457,6 +467,7 @@ namespace LuckyPickerWpf
 
         void DoBallPickOne()
         {
+            AudioUnmute.DefaultOutput();
             var picked = core.PickOne();
             if (picked == null) { HintText.Text = "※ 当前无候选人"; return; }
             ball?.ShowPicked(picked.name);
@@ -468,12 +479,14 @@ namespace LuckyPickerWpf
 
         void DoBallPickMulti()
         {
+            AudioUnmute.DefaultOutput();
             var list = core.PickMulti(5);
             if (list.Count == 0) { HintText.Text = "※ 当前无候选人"; return; }
+            var names = list.Select(x => x.name).ToList();
             ball?.ShowPicked(list.Count + "人");
             ball?.AutoHideAfterPick();
-            Speak(string.Join("、", list.Select(x => x.name)));
-            AddHistory(new HistoryEntry { time = Now(), text = "连抽： " + string.Join("、", list.Select(x => x.name)), classId = core.currentClassId });
+            tts?.SpeakSequence(names);
+            AddHistory(new HistoryEntry { time = Now(), text = "连抽： " + string.Join("、", names), classId = core.currentClassId });
             RefreshPoolStats();
         }
 
@@ -500,22 +513,27 @@ namespace LuckyPickerWpf
         SettingsWindow? settingsWin;
         void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
 
-        void OpenSettings()
+        void OpenSettings(bool history = false)
         {
-            if (settingsWin != null && settingsWin.IsLoaded) { settingsWin.Activate(); return; }
+            if (settingsWin != null && settingsWin.IsLoaded)
+            {
+                if (history) settingsWin.ShowHistory();
+                settingsWin.Activate();
+                return;
+            }
             settingsWin = new SettingsWindow(this,
                 applyVoice: ApplyVoicePublic,
-                ballChanged: ApplyBallSettings,          // 大小 / 显隐 / 固定 → 立即生效
+                ballChanged: ApplyBallSettings,
                 rosterSaved: ReloadRosterFromDisk,
                 parseRoster: ParseRosterFile,
                 askPrefetch: names => ShowPrefetchDialog(names, settingsWin, modal: false),
-                showHistory: () => ShowHistoryDialog(settingsWin, modal: false),
                 showUpdateDownload: res => ShowUpdateDownload(res, settingsWin, modal: false),
                 speak: text => { try { Speak(text); } catch { } },
                 changeDefaultClass: () => { AppConfig.DefaultClassId = ""; AppConfig.Save(); classChosen = false; ShowClassMini(); },
                 onQuit: QuitApp);
             settingsWin.Closed += (s, e) => settingsWin = null;
             settingsWin.Show();
+            if (history) settingsWin.ShowHistory();
         }
 
         /// <summary>把悬浮球相关的配置一次性应用到球上（设置窗口调用，立即生效 + 已随 AppConfig.Save 持久化）。</summary>
@@ -699,18 +717,19 @@ namespace LuckyPickerWpf
             tray.MouseClick += (s, e) =>
             {
                 if (e.Button != System.Windows.Forms.MouseButtons.Right) return;
-                Dispatcher.BeginInvoke(() => ShowTrayMenu(e.Location));
+                Dispatcher.BeginInvoke(() => ShowTrayMenu(System.Windows.Forms.Cursor.Position));
             };
         }
 
         void ShowTrayMenu(System.Drawing.Point screenPt)
         {
-            // 再点一次托盘图标 → 收起已打开的菜单
+            // 自动失焦关闭后，旧引用不应吞掉下一次右键。
             if (trayMenu != null)
             {
+                bool wasOpen = trayMenu.IsOpen;
                 try { trayMenu.Close(); } catch { }
                 trayMenu = null;
-                return;
+                if (wasOpen) return;
             }
             var menu = new ModernMenu(210);
             trayMenu = menu;
@@ -878,9 +897,7 @@ namespace LuckyPickerWpf
                 var classes = new Dictionary<string, string>(core.classNames);
                 foreach (var s in list)
                     if (!classes.ContainsKey(s.classId)) classes[s.classId] = s.classId + "班";
-                Directory.CreateDirectory(LuckyCore.DataDir());
-                File.WriteAllText(LuckyCore.DataPath(),
-                    System.Text.Json.JsonSerializer.Serialize(new DataFile { classes = classes, students = list }));
+                LuckyCore.SaveDataFile(new DataFile { classes = classes, students = list });
                 core.Reload();
                 InitCore();
                 HintText.Text = "√ 名单已保存（" + list.Count + " 名学生）";
@@ -926,9 +943,7 @@ namespace LuckyPickerWpf
                         status.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 38, 38));
                         return;
                     }
-                    Directory.CreateDirectory(LuckyCore.DataDir());
-                    File.WriteAllText(LuckyCore.DataPath(),
-                        System.Text.Json.JsonSerializer.Serialize(new DataFile { classes = data.classes, students = data.students }));
+                    LuckyCore.SaveDataFile(new DataFile { classes = data.classes, students = data.students });
                     core.Reload();
                     InitCore();
                     status.Text = "已导入 " + data.students.Count + " 名学生并保存 ✓";
@@ -1031,40 +1046,6 @@ namespace LuckyPickerWpf
             if (modal) dlg.ShowDialog(); else dlg.Show();
         }
 
-        void ShowHistoryDialog(Window? owner = null, bool modal = true)
-        {
-            var dlg = new Window
-            {
-                Icon = Icon,
-                Title = "抽选记录", Width = 460, Height = 460,
-                MinHeight = 320, MinWidth = 360,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = owner ?? (Window)this
-            };
-            // Grid: 上 = 列表（自适应撑满），下 = 按钮（固定 50）。避免按钮被裁掉。
-            var grid = new Grid { Margin = new Thickness(16, 16, 16, 14) };
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var list = new ListBox { FontSize = 12, BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1) };
-            var items = HistoryStore.Load().Select(h => h.time + "  " + h.text).ToList();
-            if (items.Count == 0) items.Add("（暂无记录）");
-            list.ItemsSource = items;
-            Grid.SetRow(list, 0);
-            grid.Children.Add(list);
-
-            var btnRow = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
-            var btnClear = new Button { Content = "清空记录", Width = 110, Cursor = Cursors.Hand, Style = (Style)FindResource("ModernBtnGhost") };
-            btnClear.Click += (s, e) => { HistoryStore.Clear(); items.Clear(); items.Add("（已清空）"); list.ItemsSource = items.ToList(); };
-            var btnClose = new Button { Content = "关闭", Width = 90, Cursor = Cursors.Hand, Margin = new Thickness(10, 0, 0, 0), Style = (Style)FindResource("ModernBtn") };
-            btnClose.Click += (s, e) => dlg.Close();
-            btnRow.Children.Add(btnClear); btnRow.Children.Add(btnClose);
-            Grid.SetRow(btnRow, 1);
-            grid.Children.Add(btnRow);
-
-            dlg.Content = grid;
-            if (modal) dlg.ShowDialog(); else dlg.Show();
-        }
-
         void ShowAboutDialog()
         {
             var dlg = new Window
@@ -1127,6 +1108,16 @@ namespace LuckyPickerWpf
                 MessageBox.Show(owner ?? (Window)this, "未获取到安装程序下载地址，请到官网下载。", "更新", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var downloadUri) || downloadUri.Scheme != Uri.UriSchemeHttps)
+            {
+                MessageBox.Show(owner ?? (Window)this, "安装程序必须使用 HTTPS 下载，已取消本次下载。", "更新", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            if (res.SetupSha256.Length > 0 && (res.SetupSha256.Length != 64 || res.SetupSha256.Any(c => !Uri.IsHexDigit(c))))
+            {
+                MessageBox.Show(owner ?? (Window)this, "更新信息中的 SHA-256 校验值无效，已取消本次下载。", "更新", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
             string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LuckyPicker", "updates");
             Directory.CreateDirectory(dir);
             string file = Path.Combine(dir, "LuckyPicker-Setup-" + (res.LatestBuild > 0 ? res.LatestBuild.ToString() : "latest") + ".exe");
@@ -1168,6 +1159,7 @@ namespace LuckyPickerWpf
             root.Children.Add(btns);
 
             var cts = new System.Threading.CancellationTokenSource();
+            dlg.Closed += (s, e) => cts.Cancel();
             bRetry.Click += async (s, e) => { await RunDownload(); };
             bRetry.IsEnabled = false;
 
@@ -1186,38 +1178,46 @@ namespace LuckyPickerWpf
                     using var resp = await http.GetAsync(url, System.Net.Http.HttpCompletionOption.ResponseHeadersRead, cts.Token);
                     resp.EnsureSuccessStatusCode();
                     long? total = resp.Content.Headers.ContentLength;
-                    using var src = await resp.Content.ReadAsStreamAsync();
-                    using var fs = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.None);
+                    using var src = await resp.Content.ReadAsStreamAsync(cts.Token);
                     var buf = new byte[81920];
                     long read = 0;
                     int n;
-                    while ((n = await src.ReadAsync(buf, 0, buf.Length, cts.Token)) > 0)
+                    using (var fs = new FileStream(file, FileMode.Create, FileAccess.Write, FileShare.None))
                     {
-                        await fs.WriteAsync(buf, 0, n, cts.Token);
-                        read += n;
-                        if (total.HasValue && total.Value > 0)
+                        while ((n = await src.ReadAsync(buf, 0, buf.Length, cts.Token)) > 0)
                         {
-                            double pct = read * 100.0 / total.Value;
-                            bar.Value = pct;
-                            status.Text = string.Format("已下载 {0:F1} / {1:F1} MB（{2:F0}%）",
-                                read / 1048576.0, total.Value / 1048576.0, pct);
+                            await fs.WriteAsync(buf, 0, n, cts.Token);
+                            read += n;
+                            if (total.HasValue && total.Value > 0)
+                            {
+                                double pct = read * 100.0 / total.Value;
+                                bar.Value = pct;
+                                status.Text = string.Format("已下载 {0:F1} / {1:F1} MB（{2:F0}%）",
+                                    read / 1048576.0, total.Value / 1048576.0, pct);
+                            }
+                            else
+                            {
+                                status.Text = string.Format("已下载 {0:F1} MB", read / 1048576.0);
+                            }
                         }
-                        else
-                        {
-                            status.Text = string.Format("已下载 {0:F1} MB", read / 1048576.0);
-                        }
+                    }
+                    if (res.SetupSha256.Length > 0)
+                    {
+                        status.Text = "正在校验安装程序…";
+                        using var downloaded = File.OpenRead(file);
+                        string actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(downloaded)).ToLowerInvariant();
+                        if (!string.Equals(actual, res.SetupSha256, StringComparison.Ordinal))
+                            throw new InvalidDataException("SHA-256 校验失败，文件可能已损坏或被篡改。");
                     }
                     bar.Value = 100;
                     status.Text = "下载完成，可点击「打开安装程序」安装。";
                     status.Foreground = new SolidColorBrush(Color.FromRgb(6, 122, 91));
                     bOpen.IsEnabled = true;
                     bRetry.IsEnabled = true;
-                    // 下载完成后自动打开安装程序供手动安装
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(file) { UseShellExecute = true }); } catch { }
                 }
                 catch (Exception ex)
                 {
-                    status.Text = "下载失败：" + ex.Message + "\\n可点击「重试」继续。";
+                    status.Text = "下载失败：" + ex.Message + "\n可点击「重试」继续。";
                     status.Foreground = new SolidColorBrush(Color.FromRgb(220, 38, 38));
                     bRetry.IsEnabled = true;
                 }
@@ -1344,6 +1344,25 @@ namespace LuckyPickerWpf
             return trayMenu;
         }
 
+        internal ModernMenu? ShowTrayMenuAtCursorForTest(int x, int y)
+        {
+            var previous = System.Windows.Forms.Cursor.Position;
+            try
+            {
+                System.Windows.Forms.Cursor.Position = new System.Drawing.Point(x, y);
+                ShowTrayMenu(System.Windows.Forms.Cursor.Position);
+                PumpFrames(150);
+                return trayMenu;
+            }
+            finally { System.Windows.Forms.Cursor.Position = previous; }
+        }
+
+        internal void HideTrayMenuForTest()
+        {
+            try { trayMenu?.Close(); } catch { }
+            PumpFrames(150);
+        }
+
         /// <summary>自检用：关闭并清空托盘菜单引用（模拟"菜单已收起"，以便再次弹出）。</summary>
         internal void CloseTrayMenuForTest()
         {
@@ -1371,7 +1390,8 @@ namespace LuckyPickerWpf
             return ok;
         }
         internal bool SettingsNavRoundedForTest(SettingsWindow sw) => sw.NavRoundedForTest;
-        internal void SettingsOpenChildForTest(SettingsWindow sw) => sw.OpenChildForTest();
+        internal void OpenHistoryForTest() { OpenSettings(true); PumpFrames(300); }
+        internal int SettingsCurrentPageForTest(SettingsWindow sw) => sw.CurrentPageForTest;
         internal int SettingsBallSizeCheckedCountForTest(SettingsWindow sw) => sw.BallSizeCheckedCountForTest;
         internal double SettingsBallPreviewDiameterForTest(SettingsWindow sw) => sw.BallPreviewDiameterForTest;
         internal string SettingsStatusTextForTest(SettingsWindow sw) => sw.StatusTextForTest;

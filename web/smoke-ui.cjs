@@ -14,6 +14,7 @@ const dom = new JSDOM(html, { runScripts: 'outside-only', url: 'file:///tmp/inde
 const w = dom.window;
 w.confirm = () => true;
 w.alert = () => {};
+w.fetch = () => Promise.reject(new Error('Offline UI test'));
 try { w.eval(pakoSrc); } catch (e) { console.log('pako eval fail', e.message); }
 try { w.eval(appSrc); } catch (e) { console.log('app eval fail', e.message); process.exit(1); }
 

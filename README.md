@@ -1,7 +1,7 @@
 # YBH幸运摇人器
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-26H2%20Build%2018-blue.svg)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1%2B19-blue.svg)](docs/CHANGELOG.md)
 [![GitHub](https://img.shields.io/badge/GitHub-Yibianhui%2FLuckyPicker-black.svg)](https://github.com/Yibianhui/LuckyPicker)
 
 多端班级随机摇人工具：**Windows（WPF 重构版为主）+ Android + Linux + Web**。
@@ -103,7 +103,8 @@ LuckyPicker/
 
 **Web / Linux**：`web/` 即用；Linux 用 Electron 打包 `linux/app/`。
 
-**Web 核心测试**：`web/test-core.cjs`（核心逻辑）+ `web/smoke-ui.cjs`（界面冒烟）。
+**Web 测试**：在 `web/` 运行 `npm ci && npm test`（核心逻辑 + 界面冒烟，默认离线）；
+`npm run test:online` 额外验证在线语音链路。
 
 ## 名单与隐私（重要）
 

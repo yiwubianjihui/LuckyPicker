@@ -1,10 +1,12 @@
 {
   "product": "YBH幸运摇人器",
-  "version": "26H2 Build 12",
-  "build": 12,
-  "channel": "26H2",
+  "version": "1.1+19",
+  "build": 19,
+  "channel": "1.1",
   "url": "https://lr.yibianhui.cn/",
-  "notes": "1. 全新桌面悬浮球：单击抽取、可拖动、抽中姓名球面显示。\n2. 新增开机自启动（登录后仅显示悬浮球）。\n3. 界面细节优化，版本与更新窗口新增偏好设置。",
-  "releaseDate": "2026-08-31",
+  "setupUrl": "https://lr.yibianhui.cn/download/LuckyPicker-win-setup-1.1+build19.exe",
+  "setupSha256": "df309db5e2078bc3909510678a4e0878efbb8c1339844aedc1c8bf9d80a0a388",
+  "notes": "1. 修复托盘菜单定位并统一设置内抽选记录。\n2. 优化整体界面、连抽播报间隔和抽人自动取消静音。\n3. Android 包自 Build19 起更换签名密钥，覆盖安装前请先卸载旧版。",
+  "releaseDate": "2026-10-29",
   "mandatory": false
 }

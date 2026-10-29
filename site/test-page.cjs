@@ -1,46 +1,28 @@
-const { JSDOM } = require('E:/dsh/LuckyPicker/web/node_modules/jsdom');
+const { JSDOM } = require('../web/node_modules/jsdom');
 const fs = require('fs');
 const path = require('path');
 
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+const dom = new JSDOM(html, { url: 'https://lr.yibianhui.cn/' });
+const doc = dom.window.document;
 let pass = 0, fail = 0;
 function check(name, ok) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name); ok ? pass++ : fail++; }
 
-const dom = new JSDOM(html, { runScripts: 'dangerously', url: 'file://' + __dirname.replace(/\\/g, '/') + '/index.html' });
-const doc = dom.window.document;
+check('page title', doc.title.includes('YBH幸运摇人器'));
+check('current version', doc.querySelector('.ver')?.textContent.includes('1.1+19'));
+const mainDownload = doc.querySelector('a.dl-main');
+check('main Windows download', mainDownload?.getAttribute('href') === 'download/LuckyPicker-win-setup-1.1+build19.exe');
+check('download options rendered', doc.querySelectorAll('.more-body .opt').length === 7);
+const optionLinks = [...doc.querySelectorAll('.more-body a.go')].map(a => a.getAttribute('href'));
+check('WPF portable link', optionLinks.includes('download/LuckyPicker-win-wpf-1.1+build19.zip'));
+check('Android link', optionLinks.some(href => href?.endsWith('.apk')));
+check('Linux link', optionLinks.some(href => href?.endsWith('.zip') && href.includes('linux')));
+check('Web link', optionLinks.includes('web/'));
+const githubLinks = [...doc.querySelectorAll('a[href*="github.com"]')].map(a => a.href);
+check('GitHub links use project repository', githubLinks.length >= 4 && githubLinks.every(href => href.startsWith('https://github.com/Yibianhui/LuckyPicker')));
+check('SHA-256 format', /^[0-9A-F]{64}$/.test(doc.getElementById('sha')?.textContent.trim() || ''));
+check('latest changelog entry', doc.querySelector('.tl .ev b')?.textContent.includes('1.1+19'));
 
-setTimeout(() => {
-  // 1) 5 张版本卡
-  const cards = doc.querySelectorAll('.vcard');
-  check('5 version cards', cards.length === 5);
-  // 2) 默认选中 Windows 安装版
-  check('default title', doc.getElementById('dTitle').textContent.indexOf('Windows 安装版') >= 0);
-  check('default size', doc.getElementById('dMeta').textContent.indexOf('511 KB') >= 0);
-  // 3) 逐个点击并校验
-  const keys = ['win-install', 'win-portable', 'android', 'linux', 'web'];
-  const expected = {
-    'win-install': ['Windows 安装版', 'Setup.exe'],
-    'win-portable': ['Windows 便携版', 'portable'],
-    'android': ['Android', 'LuckyPicker.apk'],
-    'linux': ['Linux', 'LuckyPicker-linux-x64.zip'],
-    'web': ['Web 版', 'lucky-picker-web.zip']
-  };
-  let filesOk = true;
-  for (let i = 0; i < keys.length; i++) {
-    cards[i].dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-    const t = doc.getElementById('dTitle').textContent;
-    const href = doc.getElementById('dBtn').getAttribute('href');
-    const okTitle = t.indexOf(expected[keys[i]][0]) >= 0;
-    const okHref = href && href.indexOf(expected[keys[i]][1]) >= 0;
-    const filePath = path.join(__dirname, href.replace(/\//g, path.sep));
-    const okFile = fs.existsSync(filePath);
-    if (!okFile) filesOk = false;
-    check('card ' + keys[i] + ' title+href', okTitle && okHref && okFile);
-  }
-  check('all download files exist', filesOk);
-  // 4) 按钮文案
-  check('button label', doc.getElementById('dBtn').textContent.indexOf('下载') >= 0);
-  console.log('----');
-  console.log(fail === 0 ? 'ALL PASS (' + pass + ')' : fail + ' FAILURES of ' + (pass + fail));
-  process.exit(fail === 0 ? 0 : 1);
-}, 300);
+console.log('----');
+console.log(fail === 0 ? 'ALL PASS (' + pass + ')' : fail + ' FAILURES of ' + (pass + fail));
+process.exit(fail === 0 ? 0 : 1);

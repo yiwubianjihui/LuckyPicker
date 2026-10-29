@@ -1,1 +1,12 @@
-{"name":"lucky-picker-web","private":true,"dependencies":{"jsdom":"^30.0.1","pako":"^3.0.1"}}
+{
+  "name": "lucky-picker-web",
+  "private": true,
+  "scripts": {
+    "test": "node test-core.cjs && node smoke-ui.cjs",
+    "test:online": "node test-core.cjs --online"
+  },
+  "dependencies": {
+    "jsdom": "^30.0.1",
+    "pako": "^3.0.1"
+  }
+}

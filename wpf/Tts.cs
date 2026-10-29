@@ -85,7 +85,7 @@ namespace LuckyPickerWpf
                     defaultClassId = DefaultClassId, ballPinned = BallPinned,
                     lastUpdateCheckDate = LastUpdateCheckDate
                 };
-                File.WriteAllText(ConfigPath, JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
+                JsonStorage.WriteAtomic(ConfigPath, JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
             }
             catch { }
         }
@@ -604,6 +604,86 @@ namespace LuckyPickerWpf
         }
     }
 
+    static class AudioUnmute
+    {
+        [ComImport, Guid("BCDE0395-E52F-467C-8E3D-C4579291692E")]
+        class MMDeviceEnumeratorCom { }
+
+        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
+        interface IMMDeviceEnumerator
+        {
+            int EnumAudioEndpoints(int dataFlow, uint stateMask, out IntPtr devices);
+            int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);
+        }
+
+        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("D666063F-1587-4E43-81F1-B948E807363F")]
+        interface IMMDevice
+        {
+            [PreserveSig]
+            int Activate(ref Guid iid, uint classContext, IntPtr activationParams, out IntPtr endpoint);
+        }
+
+        [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("5CDF2C82-841E-4546-9722-0CF74078229A")]
+        interface IAudioEndpointVolume
+        {
+            int RegisterControlChangeNotify(IntPtr notify);
+            int UnregisterControlChangeNotify(IntPtr notify);
+            int GetChannelCount(out uint channelCount);
+            int SetMasterVolumeLevel(float level, IntPtr eventContext);
+            int SetMasterVolumeLevelScalar(float level, IntPtr eventContext);
+            int GetMasterVolumeLevel(out float level);
+            int GetMasterVolumeLevelScalar(out float level);
+            int SetChannelVolumeLevel(uint channel, float level, IntPtr eventContext);
+            int SetChannelVolumeLevelScalar(uint channel, float level, IntPtr eventContext);
+            int GetChannelVolumeLevel(uint channel, out float level);
+            int GetChannelVolumeLevelScalar(uint channel, out float level);
+            int SetMute([MarshalAs(UnmanagedType.Bool)] bool mute, IntPtr eventContext);
+            int GetMute([MarshalAs(UnmanagedType.Bool)] out bool mute);
+            int GetVolumeStepInfo(out uint step, out uint stepCount);
+            int VolumeStepUp(IntPtr eventContext);
+            int VolumeStepDown(IntPtr eventContext);
+            int QueryHardwareSupport(out uint hardwareSupportMask);
+            int GetVolumeRange(out float minDb, out float maxDb, out float incrementDb);
+        }
+
+        public static string LastError { get; private set; } = "";
+
+        public static bool DefaultOutput()
+        {
+            IMMDeviceEnumerator? enumerator = null;
+            IMMDevice? device = null;
+            IAudioEndpointVolume? volume = null;
+            IntPtr volumePtr = IntPtr.Zero;
+            LastError = "";
+            try
+            {
+                enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorCom();
+                int hr = -1;
+                for (int role = 0; role <= 2; role++)
+                {
+                    hr = enumerator.GetDefaultAudioEndpoint(0, role, out device);
+                    if (hr == 0) break;
+                }
+                if (hr != 0 || device == null) { LastError = "GetDefaultAudioEndpoint=0x" + hr.ToString("X8"); return false; }
+                Guid iid = typeof(IAudioEndpointVolume).GUID;
+                hr = device.Activate(ref iid, 23, IntPtr.Zero, out volumePtr);
+                if (hr != 0 || volumePtr == IntPtr.Zero) { LastError = "Activate=0x" + hr.ToString("X8"); return false; }
+                volume = (IAudioEndpointVolume)Marshal.GetObjectForIUnknown(volumePtr);
+                hr = volume.SetMute(false, IntPtr.Zero);
+                if (hr != 0) { LastError = "SetMute=0x" + hr.ToString("X8"); return false; }
+                return true;
+            }
+            catch (Exception ex) { LastError = ex.GetType().Name + ": " + ex.Message; return false; }
+            finally
+            {
+                if (volume != null) Marshal.FinalReleaseComObject(volume);
+                if (volumePtr != IntPtr.Zero) Marshal.Release(volumePtr);
+                if (device != null) Marshal.FinalReleaseComObject(device);
+                if (enumerator != null) Marshal.FinalReleaseComObject(enumerator);
+            }
+        }
+    }
+
     // ---------------- 语音引擎（在线优先 + 缓存 + 本地降级） ----------------
     public class TtsEngine : IDisposable
     {
@@ -669,22 +749,32 @@ namespace LuckyPickerWpf
             return "azure"; // auto：微软神经语音（Azure REST 直连）优先，失败回退百度
         }
 
-        /// <summary>依次播报多个文本（串行，每个都命中缓存，避免拼接整句导致缓存失效）。</summary>
+        /// <summary>先准备全部音频再连续播放，避免姓名之间插入网络合成等待。</summary>
         public void SpeakSequence(IEnumerable<string> texts)
         {
             var list = texts?.Where(t => !string.IsNullOrEmpty(t)).ToList();
             if (list == null || list.Count == 0) return;
+            int g = ++gen;
             Task.Run(() =>
             {
-                foreach (var t in list)
+                var clips = new List<(string Text, string Tag, string File)>();
+                foreach (var text in list)
                 {
-                    if (stopped) return;
-                    int g = ++gen;
-                    SpeakWorker(g, t);   // 同步执行到底，天然串行
+                    if (g != gen || stopped) return;
+                    try
+                    {
+                        bool ready = EnsureCached(g, text, out string tag, out string file);
+                        clips.Add((text, ready ? tag : "", ready ? file : ""));
+                    }
+                    catch { clips.Add((text, "", "")); }
+                }
+                foreach (var clip in clips)
+                {
+                    if (g != gen || stopped) return;
+                    PlayPrepared(g, clip.Text, clip.Tag, clip.File, true);
                 }
             });
         }
-
 
         public void Speak(string text)
         {
@@ -694,68 +784,73 @@ namespace LuckyPickerWpf
             Task.Run(() => SpeakWorker(g, t));
         }
 
+        bool EnsureCached(int g, string text, out string tag, out string file)
+        {
+            tag = EffectiveSource();
+            file = "";
+            if (!onlineOk || AppConfig.TtsSource == "off" || tag == "off") return false;
+            string ext = tag == "edge" ? "wav" : "mp3";
+            file = CachePath(tag, text);
+            if (File.Exists(file)) return true;
+            if (g != gen || stopped) return false;
+
+            byte[]? data = null;
+            if (tag == "azure")
+            {
+                SetStatus("♪ 正在合成自然语音...");
+                data = MsTts.Synthesize(text, AppConfig.TtsVoice);
+                if (data == null && AppConfig.TtsSource == "auto")
+                {
+                    tag = "baidu";
+                    file = CachePath(tag, text);
+                }
+            }
+            else if (tag == "edge")
+            {
+                SetStatus("♪ 正在合成自然语音...");
+                data = EdgeTts.Synthesize(text, AppConfig.TtsVoice, 2500, 8000);
+                if (data == null)
+                {
+                    edgeBlocked = true;
+                    AppConfig.EdgeBlocked = true;
+                    AppConfig.Save();
+                    return false;
+                }
+            }
+            if (data == null && tag == "baidu")
+            {
+                SetStatus("♪ 正在合成语音...");
+                data = BaiduTts.Synthesize(text);
+                if (data == null) onlineOk = false;
+            }
+            if (data == null) return false;
+            try
+            {
+                Directory.CreateDirectory(CacheDir);
+                File.WriteAllBytes(file, data);
+            }
+            catch { }
+            return File.Exists(file);
+        }
+
         void SpeakWorker(int g, string text)
         {
             try
             {
-                if (!onlineOk || AppConfig.TtsSource == "off") { SapiFallback(g, text); return; }
-                string tag = EffectiveSource();
-                if (tag == "off") { SapiFallback(g, text); return; }
-                string ext = tag == "edge" ? "wav" : "mp3";
-                string file = CachePath(tag, text);
-                if (!File.Exists(file))
-                {
-                    if (g != gen || stopped) return;
-                    byte[] data = null;
-                    if (tag == "azure")
-                    {
-                        SetStatus("♪ 正在合成自然语音...");
-                        data = MsTts.Synthesize(text, AppConfig.TtsVoice);
-                        if (data == null && AppConfig.TtsSource == "auto")
-                        {
-                            tag = "baidu";
-                            ext = "mp3";
-                            file = CachePath(tag, text);
-                        }
-                    }
-                    else if (tag == "edge")
-                    {
-                        SetStatus("♪ 正在合成自然语音...");
-                        data = EdgeTts.Synthesize(text, AppConfig.TtsVoice, 2500, 8000);
-                        if (data == null)
-                        {
-                            // Edge WebSocket 端点不可用（常见于国内网络 403）
-                            edgeBlocked = true;
-                            AppConfig.EdgeBlocked = true;
-                            AppConfig.Save();
-                            SapiFallback(g, text);
-                            return;
-                        }
-                    }
-                    if (data == null && tag == "baidu")
-                    {
-                        SetStatus("♪ 正在合成语音...");
-                        data = BaiduTts.Synthesize(text);
-                        if (data == null) { onlineOk = false; SapiFallback(g, text); return; }
-                    }
-                    if (data == null) { SapiFallback(g, text); return; }
-                    try
-                    {
-                        Directory.CreateDirectory(CacheDir);
-                        File.WriteAllBytes(file, data);
-                    }
-                    catch { }
-                }
-                if (g != gen || stopped) return;
-                PlayFile(tag, file);
-                SetStatus(tag == "azure" ? "♪ 微软神经语音（" + VoiceDisplay() + "）"
-                    : tag == "edge" ? "♪ Edge 直连语音（" + VoiceDisplay() + "）"
-                    : "♪ 百度在线语音");
+                bool ready = EnsureCached(g, text, out string tag, out string file);
+                PlayPrepared(g, text, ready ? tag : "", ready ? file : "");
             }
-            catch
-            {
-                SapiFallback(g, text);
-            }
+            catch { SapiFallback(g, text); }
+        }
+
+        void PlayPrepared(int g, string text, string tag, string file, bool waitForFallback = false)
+        {
+            if (g != gen || stopped) return;
+            if (file.Length == 0) { SapiFallback(g, text, waitForFallback); return; }
+            PlayFile(tag, file);
+            SetStatus(tag == "azure" ? "♪ 微软神经语音（" + VoiceDisplay() + "）"
+                : tag == "edge" ? "♪ Edge 直连语音（" + VoiceDisplay() + "）"
+                : "♪ 百度在线语音");
         }
 
         void PlayFile(string tag, string file)
@@ -770,9 +865,15 @@ namespace LuckyPickerWpf
             }
         }
 
-        void SapiFallback(int g, string text)
+        void SapiFallback(int g, string text, bool wait = false)
         {
-            if (sapi == null) return;
+            if (sapi == null || g != gen || stopped) return;
+            if (wait)
+            {
+                try { sapi.Speak(text); } catch { }
+                TryInvoke(delegate { if (onStatus != null) onStatus("♪ 本地语音（离线/备用）"); });
+                return;
+            }
             TryInvoke(delegate
             {
                 if (g != gen || stopped) return;

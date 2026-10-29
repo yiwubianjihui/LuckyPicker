@@ -27,6 +27,32 @@ namespace LuckyPickerWpf
         public List<Student> students { get; set; } = new();
     }
 
+    public static class JsonStorage
+    {
+        public static void WriteAtomic(string path, string json)
+        {
+            string? dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false)))
+                {
+                    writer.Write(json);
+                    writer.Flush();
+                    stream.Flush(true);
+                }
+                if (File.Exists(path)) File.Replace(temp, path, null);
+                else File.Move(temp, path);
+            }
+            finally
+            {
+                if (File.Exists(temp)) File.Delete(temp);
+            }
+        }
+    }
+
     public class LuckyCore
     {
         public List<Student> allStudents = new();
@@ -58,35 +84,57 @@ namespace LuckyPickerWpf
 
         public static string DataPath() => Path.Combine(DataDir(), "students.json");
 
-        public static DataFile LoadDataFile()
+        public static DataFile LoadDataFile() => LoadDataFile(out _);
+
+        public static DataFile LoadDataFile(out string? error)
         {
-            string json = null!;
+            error = null;
             string pdPath = DataPath();
-            if (File.Exists(pdPath))
+            string path = File.Exists(pdPath) ? pdPath : Path.Combine(AppContext.BaseDirectory, "students.json");
+            if (!File.Exists(path)) return new DataFile();
+            try
             {
-                try { json = File.ReadAllText(pdPath); } catch { }
-            }
-            if (string.IsNullOrWhiteSpace(json))
-            {
-                string exePath = Path.Combine(AppContext.BaseDirectory, "students.json");
-                if (File.Exists(exePath))
+                string json = File.ReadAllText(path);
+                var data = JsonSerializer.Deserialize<DataFile>(json) ?? throw new JsonException("名单文件内容为空。");
+                if (path != pdPath)
                 {
-                    try
-                    {
-                        json = File.ReadAllText(exePath);
-                        try { File.WriteAllText(pdPath, json); } catch { }
-                    }
-                    catch { }
+                    try { JsonStorage.WriteAtomic(pdPath, json); }
+                    catch (Exception ex) { App.Log("ROSTER-COPY-EX: " + ex); }
                 }
+                return data;
             }
-            if (string.IsNullOrWhiteSpace(json)) return new DataFile();
-            try { return JsonSerializer.Deserialize<DataFile>(json) ?? new DataFile(); }
-            catch { return new DataFile(); }
+            catch (Exception ex)
+            {
+                error = "名单读取失败：" + ex.Message + "\n原文件未删除；请通过名单管理重新导入或恢复备份。";
+                App.Log("ROSTER-LOAD-EX: " + ex);
+                try
+                {
+                    string backup = Path.Combine(DataDir(), "students.corrupt-" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + ".json");
+                    File.Copy(path, backup, false);
+                }
+                catch (Exception backupEx) { App.Log("ROSTER-BACKUP-EX: " + backupEx); }
+                return new DataFile();
+            }
+        }
+
+        public static void SaveDataFile(DataFile data)
+        {
+            JsonStorage.WriteAtomic(DataPath(), JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
+        }
+
+        public static string NormalizeGender(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return "";
+            string gender = value.Trim();
+            if (gender == "男" || string.Equals(gender, "male", StringComparison.OrdinalIgnoreCase)) return "male";
+            if (gender == "女" || string.Equals(gender, "female", StringComparison.OrdinalIgnoreCase)) return "female";
+            return "";
         }
 
         public void Load(DataFile data)
         {
             allStudents = data.students ?? new List<Student>();
+            foreach (var student in allStudents) student.gender = NormalizeGender(student.gender);
             classNames = data.classes ?? new Dictionary<string, string>();
             classIds = BuildClassIds();
             if (classIds.Count == 0) classIds.Add("1");
@@ -138,16 +186,27 @@ namespace LuckyPickerWpf
             return list;
         }
 
+        List<Student> ShuffledCandidates()
+        {
+            var pool = GetCandidates();
+            for (int i = pool.Count - 1; i > 0; i--)
+            {
+                int j = rnd.Next(i + 1);
+                (pool[i], pool[j]) = (pool[j], pool[i]);
+            }
+            return pool;
+        }
+
         public void ResetPool()
         {
-            remainPool = GetCandidates().OrderBy(_ => rnd.Next()).ToList();
+            remainPool = ShuffledCandidates();
             lastPicked = null;
             lastMulti = new List<Student>();
         }
 
         public void ResetPoolKeepLast()
         {
-            remainPool = GetCandidates().OrderBy(_ => rnd.Next()).ToList();
+            remainPool = ShuffledCandidates();
         }
 
         // 抽一人：返回 null 表示无可抽取（候选为空）
@@ -163,7 +222,7 @@ namespace LuckyPickerWpf
             Student? picked;
             if (noRepeat)
             {
-                if (remainPool.Count == 0) remainPool = cands.OrderBy(_ => rnd.Next()).ToList();
+                if (remainPool.Count == 0) remainPool = ShuffledCandidates();
                 int idx = rnd.Next(remainPool.Count);
                 picked = remainPool[idx];
                 remainPool.RemoveAt(idx);
@@ -184,8 +243,13 @@ namespace LuckyPickerWpf
             if (cands.Count == 0) return result;
             if (noRepeat)
             {
-                var pool = remainPool.Count > 0 ? remainPool : cands.OrderBy(_ => rnd.Next()).ToList();
-                var picked = pool.OrderBy(_ => rnd.Next()).Take(Math.Min(n, pool.Count)).ToList();
+                var pool = remainPool.Count > 0 ? remainPool : ShuffledCandidates();
+                for (int i = pool.Count - 1; i > 0; i--)
+                {
+                    int j = rnd.Next(i + 1);
+                    (pool[i], pool[j]) = (pool[j], pool[i]);
+                }
+                var picked = pool.Take(Math.Min(n, pool.Count)).ToList();
                 foreach (var p in picked) { result.Add(p); pool.Remove(p); }
                 remainPool = pool;
             }
@@ -222,32 +286,47 @@ namespace LuckyPickerWpf
 
         public static string Path_ => Path.Combine(Dir, "history.json");
 
+        public static string? LastError { get; private set; }
+
         public static List<HistoryEntry> Load()
         {
+            LastError = null;
             try
             {
                 if (!File.Exists(Path_)) return new List<HistoryEntry>();
                 return JsonSerializer.Deserialize<List<HistoryEntry>>(File.ReadAllText(Path_)) ?? new List<HistoryEntry>();
             }
-            catch { return new List<HistoryEntry>(); }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                App.Log("HISTORY-LOAD-EX: " + ex);
+                return new List<HistoryEntry>();
+            }
         }
 
-        public static void Add(HistoryEntry entry)
+        public static bool Add(HistoryEntry entry)
         {
+            var list = Load();
+            if (LastError != null) return false;
             try
             {
-                var list = Load();
                 list.Insert(0, entry);
                 if (list.Count > 500) list = list.Take(500).ToList();
-                Directory.CreateDirectory(Dir);
-                File.WriteAllText(Path_, JsonSerializer.Serialize(list));
+                JsonStorage.WriteAtomic(Path_, JsonSerializer.Serialize(list));
+                return true;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                App.Log("HISTORY-SAVE-EX: " + ex);
+                return false;
+            }
         }
 
         public static void Clear()
         {
-            try { if (File.Exists(Path_)) File.Delete(Path_); } catch { }
+            try { if (File.Exists(Path_)) File.Delete(Path_); LastError = null; }
+            catch (Exception ex) { LastError = ex.Message; App.Log("HISTORY-CLEAR-EX: " + ex); }
         }
     }
 
