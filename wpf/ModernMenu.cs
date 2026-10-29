@@ -61,7 +61,7 @@ namespace LuckyPickerWpf
         public static Color ItemFg => IsLight() ? Color.FromRgb(32, 32, 32) : Color.FromRgb(240, 240, 240);
         public static Color ItemHover => IsLight() ? Color.FromRgb(243, 244, 246) : Color.FromRgb(58, 58, 58);
         public static Color SepColor => IsLight() ? Color.FromRgb(229, 229, 229) : Color.FromRgb(72, 72, 72);
-        public static Color Accent => Color.FromRgb(37, 99, 235);
+        public static Color Accent => ThemeManager.Current.Accent;
     }
 
     public class ModernMenu

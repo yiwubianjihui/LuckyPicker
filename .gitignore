@@ -25,6 +25,8 @@ key.properties
 *.log
 error.log
 TTS_server/temp_speech.mp3
+# 自检截图可能包含真实学生姓名（隐私红线）
+.tmp/
 
 # ---- 本地配置 ----
 update.json

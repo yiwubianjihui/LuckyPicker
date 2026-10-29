@@ -1,7 +1,7 @@
 # YBH幸运摇人器
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.1%2B19-blue.svg)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2%2B21-blue.svg)](docs/CHANGELOG.md)
 [![GitHub](https://img.shields.io/badge/GitHub-Yibianhui%2FLuckyPicker-black.svg)](https://github.com/Yibianhui/LuckyPicker)
 
 多端班级随机摇人工具：**Windows（WPF 重构版为主）+ Android + Linux + Web**。
@@ -16,6 +16,10 @@
 - 📋 开发记录：[docs/CHANGELOG.md](docs/CHANGELOG.md)
 
 ## 功能特性
+
+### 界面与配色
+- **三套配色**：鼠尾草绿（默认）/ 雾霭蓝 / 墨色极简，在「设置 → 常规 → 配色」即时切换并记忆。
+  主窗口、设置窗口、悬浮球、快捷面板与弹窗同步换色，无需重启。
 
 ### 摇人
 - **班级选择**：启动时弹出班级选择窗口，之后可随时切换。

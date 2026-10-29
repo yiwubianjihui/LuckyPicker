@@ -3,13 +3,32 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
-        <SolidColorBrush x:Key="BrandBrush" Color="#4F46E5" />
-        <SolidColorBrush x:Key="InkBrush" Color="#0F172A" />
-        <SolidColorBrush x:Key="SubBrush" Color="#64748B" />
+        <!-- 默认值 = 鼠尾草绿；启动时由 ThemeManager 按用户选择覆盖 -->
+        <SolidColorBrush x:Key="BrandBrush" Color="#3F6B58" />
+        <SolidColorBrush x:Key="BrandHoverBrush" Color="#345A49" />
+        <SolidColorBrush x:Key="BrandPressedBrush" Color="#2B4B3E" />
+        <SolidColorBrush x:Key="BrandDisabledBrush" Color="#AFC3B8" />
+        <SolidColorBrush x:Key="BrandInkBrush" Color="#2F5446" />
+        <SolidColorBrush x:Key="BrandSoftBrush" Color="#EDF3EF" />
+        <SolidColorBrush x:Key="BrandSoftHoverBrush" Color="#F1F5F2" />
+        <SolidColorBrush x:Key="BrandSoftPressedBrush" Color="#E7EFE9" />
+        <SolidColorBrush x:Key="BrandSoftBorderBrush" Color="#D6E3DB" />
+        <SolidColorBrush x:Key="InkBrush" Color="#1F2421" />
+        <SolidColorBrush x:Key="InkSoftBrush" Color="#3D443F" />
+        <SolidColorBrush x:Key="SubBrush" Color="#6F756F" />
+        <SolidColorBrush x:Key="MutedBrush" Color="#949994" />
         <SolidColorBrush x:Key="SurfaceBrush" Color="#FFFFFF" />
-        <SolidColorBrush x:Key="SurfaceMutedBrush" Color="#F8FAFC" />
-        <SolidColorBrush x:Key="StrokeBrush" Color="#E2E8F0" />
-        <SolidColorBrush x:Key="BrandSoftBrush" Color="#EEF2FF" />
+        <SolidColorBrush x:Key="SurfaceMutedBrush" Color="#FAFAF7" />
+        <SolidColorBrush x:Key="CanvasBrush" Color="#F4F4F0" />
+        <SolidColorBrush x:Key="StrokeBrush" Color="#E5E5DF" />
+        <SolidColorBrush x:Key="StrokeHoverBrush" Color="#BCC9C1" />
+        <SolidColorBrush x:Key="CardShadowBrush" Color="#E9E9E3" />
+        <SolidColorBrush x:Key="ControlBgBrush" Color="#F4F4F1" />
+        <SolidColorBrush x:Key="ControlHoverBrush" Color="#EAEAE4" />
+        <SolidColorBrush x:Key="ControlPressedBrush" Color="#DFDFD8" />
+        <SolidColorBrush x:Key="BlockChipBgBrush" Color="#F5F3ED" />
+        <SolidColorBrush x:Key="BlockChipInkBrush" Color="#5E5442" />
+        <SolidColorBrush x:Key="BlockChipBorderBrush" Color="#E3DBCB" />
 
         <!-- 全局清晰度默认：抗锯齿模糊（系统缩放 100%~200% 均锐利） -->
         <Style TargetType="{x:Type Control}">
@@ -53,11 +72,11 @@
         </Style>
         <Style TargetType="Button" x:Key="PillBtn">
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="Foreground" Value="#1F2B4E" />
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
             <Setter Property="Padding" Value="16,7" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Background" Value="White" />
-            <Setter Property="BorderBrush" Value="#CBD5E1" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource StrokeBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
@@ -67,7 +86,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#DBEAFE" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandSoftBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -79,21 +98,21 @@
         <Style TargetType="ComboBox" x:Key="ModernCombo">
             <Setter Property="Height" Value="36" />
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="Foreground" Value="#1F2B4E" />
+            <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="SnapsToDevicePixels" Value="True" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ComboBox">
                         <Grid>
-                            <Border x:Name="bd" Background="#FFFFFF" BorderBrush="#E2E8F0"
+                            <Border x:Name="bd" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}"
                                     BorderThickness="1" CornerRadius="10" />
                             <ContentPresenter Margin="12,0,34,0" VerticalAlignment="Center"
                                               HorizontalAlignment="Left"
                                               Content="{TemplateBinding SelectionBoxItem}"
                                               ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
                             <Path Margin="0,0,14,0" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                  Data="M0,0 L4,4 L8,0" Stroke="#64748B" StrokeThickness="1.6"
+                                  Data="M0,0 L4,4 L8,0" Stroke="{DynamicResource SubBrush}" StrokeThickness="1.6"
                                   StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
                             <ToggleButton IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
                                           Focusable="False" ClickMode="Press" Background="Transparent"
@@ -108,8 +127,8 @@
                                    AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
                                 <!-- 投影放在底层 Border 上，内容 Border 不挂 Effect（否则选项文字发虚） -->
                                 <Grid Margin="0,4,0,0">
-                                    <Border Background="#D8DEE9" CornerRadius="10" Margin="1,2,1,0" />
-                                    <Border Background="#FCFCFC" BorderBrush="#E5E5E5"
+                                    <Border Background="{DynamicResource CardShadowBrush}" CornerRadius="10" Margin="1,2,1,0" />
+                                    <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}"
                                             BorderThickness="1" CornerRadius="10" Padding="6"
                                             MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}">
                                         <ScrollViewer MaxHeight="240" VerticalScrollBarVisibility="Auto">
@@ -121,10 +140,10 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#B9C6DA" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource StrokeHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsDropDownOpen" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#4F46E5" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource BrandBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -135,7 +154,7 @@
                     <Style TargetType="ComboBoxItem">
                         <Setter Property="Height" Value="34" />
                         <Setter Property="FontSize" Value="13" />
-                        <Setter Property="Foreground" Value="#1F2B4E" />
+                        <Setter Property="Foreground" Value="{DynamicResource InkBrush}" />
                         <Setter Property="Padding" Value="10,0,10,0" />
                         <Setter Property="Template">
                             <Setter.Value>
@@ -146,11 +165,11 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="bd" Property="Background" Value="#F3F4F6" />
+                                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource CanvasBrush}" />
                                         </Trigger>
                                         <Trigger Property="IsSelected" Value="True">
-                                            <Setter TargetName="bd" Property="Background" Value="#EFF6FF" />
-                                            <Setter Property="Foreground" Value="#4338CA" />
+                                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandSoftBrush}" />
+                                            <Setter Property="Foreground" Value="{DynamicResource BrandInkBrush}" />
                                             <Setter Property="FontWeight" Value="SemiBold" />
                                         </Trigger>
                                     </ControlTemplate.Triggers>
@@ -167,7 +186,7 @@
             <Setter Property="Height" Value="38" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="Background" Value="#4F46E5" />
+            <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="18,0,18,0" />
@@ -180,13 +199,13 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#4338CA" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#3730A3" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandPressedBrush}" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter TargetName="bd" Property="Background" Value="#93B4F5" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandDisabledBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -197,8 +216,8 @@
         <Style TargetType="Button" x:Key="ModernBtnGhost">
             <Setter Property="Height" Value="38" />
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="Foreground" Value="#334155" />
-            <Setter Property="Background" Value="#F1F5F9" />
+            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+            <Setter Property="Background" Value="{DynamicResource ControlBgBrush}" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Padding" Value="18,0,18,0" />
@@ -211,10 +230,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#E2E8F0" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ControlHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#CBD5E1" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ControlPressedBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

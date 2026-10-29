@@ -1,12 +1,12 @@
 {
   "product": "YBH幸运摇人器",
-  "version": "1.1+19",
-  "build": 19,
-  "channel": "1.1",
+  "version": "1.2+21",
+  "build": 21,
+  "channel": "1.2",
   "url": "https://lr.yibianhui.cn/",
-  "setupUrl": "https://lr.yibianhui.cn/download/LuckyPicker-win-setup-1.1+build19.exe",
-  "setupSha256": "df309db5e2078bc3909510678a4e0878efbb8c1339844aedc1c8bf9d80a0a388",
-  "notes": "1. 修复托盘菜单定位并统一设置内抽选记录。\n2. 优化整体界面、连抽播报间隔和抽人自动取消静音。\n3. Android 包自 Build19 起更换签名密钥，覆盖安装前请先卸载旧版。",
-  "releaseDate": "2026-10-29",
+  "setupUrl": "https://lr.yibianhui.cn/download/LuckyPicker-win-setup-1.2+build21.exe",
+  "setupSha256": "17576d4bc68a7ca8bc952d6a69b00cb17d6ca0fea778b1d24368b4014d16bb4c",
+  "notes": "1. 连抽播报裁掉首尾静音并拼接为单段，名字间静音从约 0.75 秒降至约 0.12 秒。\n2. 支持三套配色切换：鼠尾草绿 / 雾霭蓝 / 墨色极简，设置内即时生效并记忆。",
+  "releaseDate": "2026-10-30",
   "mandatory": false
 }

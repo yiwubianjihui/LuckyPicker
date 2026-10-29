@@ -79,12 +79,12 @@ namespace LuckyPickerWpf
         bool idleDimmed;
         DateTime lastActive = DateTime.Now;
 
-        // 浅色配色（低饱和、低干扰）
-        static readonly Color BallHi = Color.FromRgb(0xF0, 0xF6, 0xFF);
-        static readonly Color BallMid = Color.FromRgb(0xC6, 0xDC, 0xF9);
-        static readonly Color BallEdge = Color.FromRgb(0x9E, 0xC0, 0xEE);
-        static readonly Color FaceFg = Color.FromRgb(0x1D, 0x4E, 0xD8);
-        static readonly Color Accent = Color.FromRgb(0x3B, 0x82, 0xF6);
+        // 浅色配色（低饱和、低干扰）—— 跟随 ThemeManager
+        static Color BallHi => ThemeManager.Current.BallHi;
+        static Color BallMid => ThemeManager.Current.BallMid;
+        static Color BallEdge => ThemeManager.Current.BallEdge;
+        static Color FaceFg => ThemeManager.Current.BallFace;
+        static Color Accent => ThemeManager.Current.Accent;
 
         public FloatingBallWindow(Action clicked, Action pickOne, Action pickMulti,
                                   Action resetPool, Action hideSelf, Action quit, Action showMainWin)
@@ -152,7 +152,7 @@ namespace LuckyPickerWpf
             {
                 Width = inner, Height = inner,
                 CornerRadius = new CornerRadius(inner / 2),
-                Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x3A, 0x8A)),
+                Background = new SolidColorBrush(ThemeManager.Current.BallShadow),
                 Opacity = 0.20,
                 IsHitTestVisible = false,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -161,7 +161,7 @@ namespace LuckyPickerWpf
                 RenderTransformOrigin = new Point(0.5, 0.5),
                 Effect = new DropShadowEffect
                 {
-                    Color = Color.FromRgb(0x1E, 0x3A, 0x8A), Opacity = 1.0,
+                    Color = ThemeManager.Current.BallShadow, Opacity = 1.0,
                     BlurRadius = 12, ShadowDepth = 1.5, Direction = 270
                 }
             };
@@ -184,7 +184,7 @@ namespace LuckyPickerWpf
                     return;
                 }
                 ballBorder.Background = new SolidColorBrush(
-                    flashTicks % 2 == 0 ? Color.FromRgb(0xB9, 0xD3, 0xF6) : BallEdge);
+                    flashTicks % 2 == 0 ? ThemeManager.Current.BallFlash : BallEdge);
             };
 
             MouseRightButtonUp += (s, e) => { e.Handled = true; ShowContextMenu(); };
@@ -427,6 +427,22 @@ namespace LuckyPickerWpf
         /// 固定状态：固定只影响"抽完是否自动贴边收起"，不影响空闲渐隐
         /// （渐隐是纯视觉减扰，球体仍始终可点击/可拖动）。
         /// </summary>
+        /// <summary>配色切换后刷新球体渐变、字色、描边与投影。</summary>
+        public void ApplyTheme()
+        {
+            try
+            {
+                var t = ThemeManager.Current;
+                faceText.Foreground = new SolidColorBrush(t.BallFace);
+                ballBorder.Background = BuildBallBrush();
+                ballShadow.Background = new SolidColorBrush(t.BallShadow);
+                if (ballShadow.Effect is DropShadowEffect ds) ds.Color = t.BallShadow;
+                SetPinned(AppConfig.BallPinned);
+                WakeUp();
+            }
+            catch { }
+        }
+
         public void SetPinned(bool value)
         {
             try
@@ -668,6 +684,10 @@ namespace LuckyPickerWpf
             }
         }
         public bool IsPinnedNow => pinned;
+        /// <summary>自检用：球体渐变最上层色（切换配色后应随之变化）。</summary>
+        public Color? BallTopColorNow =>
+            ballBorder.Background is RadialGradientBrush g && g.GradientStops.Count > 0
+                ? g.GradientStops[0].Color : (Color?)null;
         public double BallDiameterNow => ballSize;
         public double OpacityNow => ballBorder.Opacity;
         public bool HasScaleTransform => ballBorder.RenderTransform is TransformGroup tg
@@ -757,12 +777,12 @@ namespace LuckyPickerWpf
             Width = W + PAD * 2;
 
             var panel = new StackPanel();
-            panel.Children.Add(new TextBlock { Text = "选择班级", FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)) });
-            panel.Children.Add(new TextBlock { Text = "点选后立即抽取 · 点击空白处关闭", FontSize = 8, Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), Margin = new Thickness(0, 2, 0, 6) });
+            panel.Children.Add(new TextBlock { Text = "选择班级", FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(ThemeManager.Current.Ink) });
+            panel.Children.Add(new TextBlock { Text = "点选后立即抽取 · 点击空白处关闭", FontSize = 8, Foreground = new SolidColorBrush(ThemeManager.Current.Sub), Margin = new Thickness(0, 2, 0, 6) });
             var chkDefault = new CheckBox
             {
                 Content = "设为默认（以后启动不再询问）", IsChecked = true, FontSize = 9.5,
-                Foreground = new SolidColorBrush(Color.FromRgb(30, 64, 175)), Margin = new Thickness(0, 0, 0, 8)
+                Foreground = new SolidColorBrush(ThemeManager.Current.AccentInk), Margin = new Thickness(0, 0, 0, 8)
             };
             panel.Children.Add(chkDefault);
             foreach (var id in ids)
@@ -773,12 +793,12 @@ namespace LuckyPickerWpf
                 {
                     Content = label, FontSize = 10, FontWeight = FontWeights.Bold,
                     Height = 42, Margin = new Thickness(0, 4, 0, 0), Cursor = Cursors.Hand,
-                    Background = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
-                    Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+                    Background = new SolidColorBrush(ThemeManager.Current.Canvas),
+                    Foreground = new SolidColorBrush(ThemeManager.Current.Ink),
                     BorderThickness = new Thickness(0),
                     UseLayoutRounding = true, SnapsToDevicePixels = true
                 };
-                b.Template = RoundTemplate(10, Color.FromRgb(219, 234, 254));
+                b.Template = RoundTemplate(10, ThemeManager.Current.AccentSoftBorder);
                 b.Click += (s, e) =>
                 {
                     // 先关小窗，等关闭完成后再执行回调（避免「窗口关闭期间 Show/Close」异常）
@@ -793,12 +813,12 @@ namespace LuckyPickerWpf
             {
                 Width = W,
                 Background = Brushes.White,
-                BorderBrush = new SolidColorBrush(Color.FromRgb(147, 197, 253)),
+                BorderBrush = new SolidColorBrush(ThemeManager.Current.AccentSoftBorder),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(16),
                 Padding = new Thickness(14, 12, 14, 12),
                 Child = panel,
-                Effect = new DropShadowEffect { Color = Color.FromArgb(60, 0x1E, 0x3A, 0x8A), BlurRadius = 16, ShadowDepth = 2, Direction = 270 }
+                Effect = new DropShadowEffect { Color = Color.FromArgb(60, ThemeManager.Current.BallShadow.R, ThemeManager.Current.BallShadow.G, ThemeManager.Current.BallShadow.B), BlurRadius = 16, ShadowDepth = 2, Direction = 270 }
             };
             Content = new Grid { Margin = new Thickness(PAD), Children = { card } };
 
@@ -900,7 +920,7 @@ namespace LuckyPickerWpf
             {
                 Text = "幸运摇人",
                 FontSize = 13, FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(Color.FromRgb(30, 64, 175)),
+                Foreground = new SolidColorBrush(ThemeManager.Current.AccentInk),
                 TextAlignment = TextAlignment.Center,
                 Margin = new Thickness(0, 2, 0, 8)
             });
@@ -909,11 +929,11 @@ namespace LuckyPickerWpf
             {
                 Content = "抽一人", FontSize = 15, FontWeight = FontWeights.SemiBold,
                 Height = 56, Margin = new Thickness(0, 0, 0, 10), Cursor = Cursors.Hand,
-                Background = new SolidColorBrush(Color.FromRgb(37, 99, 235)),
+                Background = new SolidColorBrush(ThemeManager.Current.Accent),
                 Foreground = Brushes.White, BorderThickness = new Thickness(0),
                 UseLayoutRounding = true, SnapsToDevicePixels = true
             };
-            bigBtn.Template = ClassMiniWindow.RoundTemplate(12, Color.FromRgb(29, 78, 216));
+            bigBtn.Template = ClassMiniWindow.RoundTemplate(12, ThemeManager.Current.AccentHover);
             bigBtn.Click += (s, e) =>
             {
                 // 固定时保持面板展开，方便连续抽签；未固定时关闭面板（球面靠边）
@@ -927,7 +947,7 @@ namespace LuckyPickerWpf
             var chkPin = new CheckBox
             {
                 Content = "固定悬浮球", IsChecked = pinned, FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)), Margin = new Thickness(0, 6, 0, 0)
+                Foreground = new SolidColorBrush(ThemeManager.Current.InkSoft), Margin = new Thickness(0, 6, 0, 0)
             };
             chkPin.Checked += (s, e) => onPinChanged?.Invoke(true);
             chkPin.Unchecked += (s, e) => onPinChanged?.Invoke(false);
@@ -938,12 +958,12 @@ namespace LuckyPickerWpf
             {
                 Width = W,
                 Background = Brushes.White,
-                BorderBrush = new SolidColorBrush(Color.FromRgb(191, 214, 245)),
+                BorderBrush = new SolidColorBrush(ThemeManager.Current.AccentSoftBorder),
                 BorderThickness = new Thickness(1),
                 CornerRadius = new CornerRadius(14),
                 Padding = new Thickness(10, 10, 10, 8),
                 Child = panel,
-                Effect = new DropShadowEffect { Color = Color.FromArgb(60, 0x1E, 0x3A, 0x8A), BlurRadius = 16, ShadowDepth = 2, Direction = 270 }
+                Effect = new DropShadowEffect { Color = Color.FromArgb(60, ThemeManager.Current.BallShadow.R, ThemeManager.Current.BallShadow.G, ThemeManager.Current.BallShadow.B), BlurRadius = 16, ShadowDepth = 2, Direction = 270 }
             };
             card.RenderTransform = new TranslateTransform(0, 8);
             card.Opacity = 0;
@@ -992,12 +1012,12 @@ namespace LuckyPickerWpf
                 Content = text, FontSize = 12.5, Height = 34,
                 Margin = new Thickness(0, 0, 0, 6),
                 Cursor = Cursors.Hand,
-                Background = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
-                Foreground = new SolidColorBrush(Color.FromRgb(51, 65, 85)),
+                Background = new SolidColorBrush(ThemeManager.Current.Canvas),
+                Foreground = new SolidColorBrush(ThemeManager.Current.InkSoft),
                 BorderThickness = new Thickness(0),
                 UseLayoutRounding = true, SnapsToDevicePixels = true
             };
-            b.Template = ClassMiniWindow.RoundTemplate(8, Color.FromRgb(226, 232, 240));
+            b.Template = ClassMiniWindow.RoundTemplate(8, ThemeManager.Current.Stroke);
             b.Click += (s, e) =>
             {
                 // 先关面板，等关闭完成后再执行回调（避免「窗口关闭期间 Show」异常）

@@ -45,6 +45,7 @@ namespace LuckyPickerWpf
         public static int BallDiameter = 96;    // 悬浮球直径（可在设置菜单调整）
         public static string DefaultClassId = ""; // 默认班级（非空则启动不再询问班级选择）
         public static bool BallPinned = true;     // 悬浮球固定（勾选后抽取不自动隐藏）
+        public static string Theme = "sage";      // 配色主题：sage | mist | ink
         public static string LastUpdateCheckDate = ""; // 静默检查更新的日期（yyyy-MM-dd，每日至多提醒一次）
 
         public static void Load()
@@ -65,6 +66,7 @@ namespace LuckyPickerWpf
                 { var v = j7b.GetInt32(); if (v >= 64 && v <= 160) BallDiameter = v; }
                 if (dict.TryGetProperty("defaultClassId", out var j7c) && j7c.ValueKind == JsonValueKind.String) DefaultClassId = j7c.GetString() ?? "";
                 if (dict.TryGetProperty("ballPinned", out var j7d) && j7d.ValueKind == JsonValueKind.False) BallPinned = false;
+                if (dict.TryGetProperty("theme", out var j7t) && j7t.ValueKind == JsonValueKind.String) Theme = ThemeManager.Normalize(j7t.GetString());
                 if (dict.TryGetProperty("ballX", out var j7) && j7.ValueKind == JsonValueKind.Number) BallX = j7.GetInt32();
                 if (dict.TryGetProperty("ballY", out var j8) && j8.ValueKind == JsonValueKind.Number) BallY = j8.GetInt32();
                 if (dict.TryGetProperty("lastUpdateCheckDate", out var j9) && j9.ValueKind == JsonValueKind.String) LastUpdateCheckDate = j9.GetString() ?? "";
@@ -82,7 +84,7 @@ namespace LuckyPickerWpf
                     ttsOnline = TtsOnline, ttsVoice = TtsVoice, ttsSource = TtsSource,
                     edgeBlocked = EdgeBlocked, updateUrl = UpdateUrl, ballVisible = BallVisible,
                     ballX = BallX, ballY = BallY, ballDiameter = BallDiameter,
-                    defaultClassId = DefaultClassId, ballPinned = BallPinned,
+                    defaultClassId = DefaultClassId, ballPinned = BallPinned, theme = Theme,
                     lastUpdateCheckDate = LastUpdateCheckDate
                 };
                 JsonStorage.WriteAtomic(ConfigPath, JsonSerializer.Serialize(obj, new JsonSerializerOptions { WriteIndented = true }));
@@ -416,7 +418,7 @@ namespace LuckyPickerWpf
                    "<prosody rate=\"+0%\" pitch=\"+0Hz\" volume=\"+0%\">" + EscapeXml(text) + "</prosody> </mstts:express-as> </voice> </speak>";
         }
 
-        // 合成一段语音，返回 MP3 字节；失败返回 null（429/5xx 自动重试，最多3次）
+        // 合成一段语音，返回 WAV(PCM) 字节；失败返回 null（429/5xx 自动重试，最多3次）
         public static byte[] Synthesize(string text, string voice)
         {
             if (string.IsNullOrEmpty(text)) return null;
@@ -433,7 +435,7 @@ namespace LuckyPickerWpf
                     req.ContentType = "application/ssml+xml";
                     req.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0";
                     req.Headers["Authorization"] = token;
-                    req.Headers["X-Microsoft-OutputFormat"] = "audio-24khz-48kbitrate-mono-mp3";
+                    req.Headers["X-Microsoft-OutputFormat"] = "riff-24khz-16bit-mono-pcm";
                     byte[] body = Encoding.UTF8.GetBytes(BuildSsml(text, voice));
                     req.ContentLength = body.Length;
                     using (var rs = req.GetRequestStream()) rs.Write(body, 0, body.Length);
@@ -443,8 +445,11 @@ namespace LuckyPickerWpf
                     {
                         s.CopyTo(ms);
                         byte[] data = ms.ToArray();
-                        if (resp.StatusCode == HttpStatusCode.OK && data.Length > 1000 &&
-                            data[0] == 0xFF && (data[1] & 0xE0) == 0xE0)
+                        bool looksWav = data.Length > 1000 && data[0] == (byte)'R' && data[1] == (byte)'I'
+                            && data[2] == (byte)'F' && data[3] == (byte)'F'
+                            && data[8] == (byte)'W' && data[9] == (byte)'A'
+                            && data[10] == (byte)'V' && data[11] == (byte)'E';
+                        if (resp.StatusCode == HttpStatusCode.OK && looksWav)
                             return data;
                         int code = (int)resp.StatusCode;
                         if ((code == 429 || code >= 500) && attempt < 3)
@@ -591,7 +596,7 @@ namespace LuckyPickerWpf
                         int st;
                         if (player.GetState(out st) != 0) break;
                         if (st == 1 || st == 4) break; // STOPPED / SHUTDOWN
-                        Thread.Sleep(120);
+                        Thread.Sleep(50);
                     }
                     return true;
                 }
@@ -684,6 +689,180 @@ namespace LuckyPickerWpf
         }
     }
 
+    // ---------------- WAV(PCM) 首尾静音裁剪与拼接 ----------------
+    internal readonly record struct WavFormat(int SampleRate, int Channels, int Bits);
+
+    internal static class WavAudio
+    {
+        public const int HeadPadMs = 30;
+        public const int TailPadMs = 90;
+
+        public static bool TryReadPcm(byte[] raw, out byte[] pcm, out WavFormat format)
+        {
+            pcm = Array.Empty<byte>();
+            format = default;
+            if (raw == null || raw.Length < 44) return false;
+            if (raw[0] != 'R' || raw[1] != 'I' || raw[2] != 'F' || raw[3] != 'F'
+                || raw[8] != 'W' || raw[9] != 'A' || raw[10] != 'V' || raw[11] != 'E') return false;
+
+            int fmtOff = -1, dataOff = -1, dataLen = 0;
+            int p = 12;
+            while (p + 8 <= raw.Length)
+            {
+                int len = ReadI32(raw, p + 4);
+                if (len < 0) return false;
+                int body = p + 8;
+                if (raw[p] == 'f' && raw[p + 1] == 'm' && raw[p + 2] == 't' && raw[p + 3] == ' ' && len >= 16)
+                    fmtOff = body;
+                else if (raw[p] == 'd' && raw[p + 1] == 'a' && raw[p + 2] == 't' && raw[p + 3] == 'a')
+                {
+                    dataOff = body;
+                    dataLen = Math.Min(len, raw.Length - body);
+                    break;
+                }
+                p = body + len + (len & 1);
+            }
+            if (fmtOff < 0 || fmtOff + 16 > raw.Length || dataOff < 0 || dataLen <= 0) return false;
+
+            int tag = ReadU16(raw, fmtOff);
+            int channels = ReadU16(raw, fmtOff + 2);
+            int rate = ReadI32(raw, fmtOff + 4);
+            int bits = ReadU16(raw, fmtOff + 14);
+            if (tag != 1 || channels < 1 || channels > 2 || rate <= 0 || bits != 16) return false;
+
+            int frame = channels * 2;
+            dataLen -= dataLen % frame;
+            if (dataLen <= 0) return false;
+            pcm = new byte[dataLen];
+            Buffer.BlockCopy(raw, dataOff, pcm, 0, dataLen);
+            format = new WavFormat(rate, channels, bits);
+            return true;
+        }
+
+        public static byte[] TrimSilence(byte[] pcm, WavFormat format)
+        {
+            int frame = format.Channels * 2;
+            if (pcm == null || pcm.Length < frame * 4) return pcm ?? Array.Empty<byte>();
+            int count = pcm.Length / frame;
+
+            int peak = 0;
+            for (int i = 0; i < pcm.Length; i += 2)
+            {
+                int v = Math.Abs((int)BitConverter.ToInt16(pcm, i));
+                if (v > peak) peak = v;
+            }
+            if (peak == 0) return Array.Empty<byte>();
+            int threshold = Math.Max(260, peak * 3 / 100);
+
+            int first = -1, last = -1;
+            for (int f = 0; f < count; f++)
+                if (Level(pcm, f * frame, format.Channels) >= threshold) { first = f; break; }
+            if (first < 0) return Array.Empty<byte>();
+            for (int f = count - 1; f >= first; f--)
+                if (Level(pcm, f * frame, format.Channels) >= threshold) { last = f; break; }
+            if (last < first) return Array.Empty<byte>();
+
+            int head = format.SampleRate * HeadPadMs / 1000;
+            int tail = format.SampleRate * TailPadMs / 1000;
+            first = Math.Max(0, first - head);
+            last = Math.Min(count - 1, last + tail);
+            int from = first * frame;
+            int len = (last - first + 1) * frame;
+            var trimmed = new byte[len];
+            Buffer.BlockCopy(pcm, from, trimmed, 0, len);
+            return trimmed;
+        }
+
+        static int Level(byte[] pcm, int offset, int channels)
+        {
+            int level = 0;
+            for (int c = 0; c < channels; c++)
+            {
+                int v = Math.Abs((int)BitConverter.ToInt16(pcm, offset + c * 2));
+                if (v > level) level = v;
+            }
+            return level;
+        }
+
+        public static byte[] BuildWav(IReadOnlyList<byte[]> parts, WavFormat format)
+        {
+            int total = 0;
+            if (parts != null)
+                foreach (var part in parts)
+                    if (part != null) total += part.Length;
+            int frame = format.Channels * 2;
+            total -= total % frame;
+            if (total <= 0) return Array.Empty<byte>();
+
+            var wav = new byte[44 + total];
+            WriteAscii(wav, 0, "RIFF"); WriteI32(wav, 4, 36 + total); WriteAscii(wav, 8, "WAVE");
+            WriteAscii(wav, 12, "fmt "); WriteI32(wav, 16, 16);
+            WriteU16(wav, 20, 1); WriteU16(wav, 22, format.Channels);
+            WriteI32(wav, 24, format.SampleRate); WriteI32(wav, 28, format.SampleRate * frame);
+            WriteU16(wav, 32, frame); WriteU16(wav, 34, format.Bits);
+            WriteAscii(wav, 36, "data"); WriteI32(wav, 40, total);
+
+            int offset = 44;
+            foreach (var part in parts)
+            {
+                if (part == null) continue;
+                int n = Math.Min(part.Length, wav.Length - offset);
+                if (n <= 0) break;
+                Buffer.BlockCopy(part, 0, wav, offset, n);
+                offset += n;
+            }
+            return wav;
+        }
+
+        public static bool SelfTest(out string detail)
+        {
+            int rate = 24000;
+            var format = new WavFormat(rate, 1, 16);
+            byte[] raw1 = MakeToneWav(rate, 200, 300, 500, format);
+            byte[] raw2 = MakeToneWav(rate, 200, 450, 500, format);
+            if (!TryReadPcm(raw1, out byte[] pcm1, out WavFormat f1)
+                || !TryReadPcm(raw2, out byte[] pcm2, out WavFormat f2)
+                || f1 != format || f2 != format)
+            {
+                detail = "WAV 解析失败";
+                return false;
+            }
+            byte[] t1 = TrimSilence(pcm1, f1);
+            byte[] t2 = TrimSilence(pcm2, f2);
+            int expected1 = (300 + HeadPadMs + TailPadMs) * rate / 1000 * 2;
+            bool trimOk = Math.Abs(t1.Length - expected1) <= rate / 1000 * 2 * 15;
+            byte[] merged = BuildWav(new[] { t1, t2 }, f1);
+            bool mergeOk = TryReadPcm(merged, out byte[] mp, out WavFormat mf)
+                && mf == f1 && mp.Length == t1.Length + t2.Length;
+            detail = $"原 {pcm1.Length / 2.0 / rate:F2}s → 裁剪 {t1.Length / 2.0 / rate:F2}s，两段拼接 {mp.Length / 2.0 / rate:F2}s";
+            return trimOk && mergeOk;
+        }
+
+        static byte[] MakeToneWav(int rate, int leadMs, int toneMs, int tailMs, WavFormat format)
+        {
+            int frames = rate * (leadMs + toneMs + tailMs) / 1000;
+            var pcm = new byte[frames * 2];
+            int from = rate * leadMs / 1000;
+            int to = rate * (leadMs + toneMs) / 1000;
+            for (int i = from; i < to; i++)
+            {
+                short s = (short)(Math.Sin(2 * Math.PI * 440 * i / rate) * 8000);
+                pcm[i * 2] = (byte)(s & 0xFF);
+                pcm[i * 2 + 1] = (byte)((s >> 8) & 0xFF);
+            }
+            return BuildWav(new[] { pcm }, format);
+        }
+
+        static void WriteAscii(byte[] b, int off, string s)
+        {
+            for (int i = 0; i < s.Length; i++) b[off + i] = (byte)s[i];
+        }
+        static void WriteU16(byte[] b, int off, int v) { b[off] = (byte)(v & 0xFF); b[off + 1] = (byte)((v >> 8) & 0xFF); }
+        static void WriteI32(byte[] b, int off, int v) { WriteU16(b, off, v & 0xFFFF); WriteU16(b, off + 2, (v >> 16) & 0xFFFF); }
+        static ushort ReadU16(byte[] b, int off) { return (ushort)(b[off] | (b[off + 1] << 8)); }
+        static int ReadI32(byte[] b, int off) { return b[off] | (b[off + 1] << 8) | (b[off + 2] << 16) | (b[off + 3] << 24); }
+    }
+
     // ---------------- 语音引擎（在线优先 + 缓存 + 本地降级） ----------------
     public class TtsEngine : IDisposable
     {
@@ -749,7 +928,7 @@ namespace LuckyPickerWpf
             return "azure"; // auto：微软神经语音（Azure REST 直连）优先，失败回退百度
         }
 
-        /// <summary>先准备全部音频再连续播放，避免姓名之间插入网络合成等待。</summary>
+        /// <summary>先准备全部音频再连续播放；WAV 裁掉首尾静音后拼成单段，避免逐条切换播放器的间隔。</summary>
         public void SpeakSequence(IEnumerable<string> texts)
         {
             var list = texts?.Where(t => !string.IsNullOrEmpty(t)).ToList();
@@ -758,22 +937,239 @@ namespace LuckyPickerWpf
             Task.Run(() =>
             {
                 var clips = new List<(string Text, string Tag, string File)>();
+                bool allReady = true;
                 foreach (var text in list)
                 {
                     if (g != gen || stopped) return;
                     try
                     {
                         bool ready = EnsureCached(g, text, out string tag, out string file);
+                        if (!ready) allReady = false;
                         clips.Add((text, ready ? tag : "", ready ? file : ""));
                     }
-                    catch { clips.Add((text, "", "")); }
+                    catch { allReady = false; clips.Add((text, "", "")); }
                 }
+                if (g != gen || stopped) return;
+
+                // 有片段缺失时整句交给本地语音，避免在线片段之间夹入逐条播放的停顿
+                if (!allReady && sapi != null) { SapiSequenceFallback(g, list); return; }
+
+                string merged = TryBuildWavSequence(clips) ?? TryBuildMp3Sequence(clips);
+                if (merged != null && g == gen && !stopped)
+                {
+                    SetStatus(PlaybackStatus(clips[0].Tag));
+                    if (PlayFile(merged)) return;
+                }
+
                 foreach (var clip in clips)
                 {
                     if (g != gen || stopped) return;
                     PlayPrepared(g, clip.Text, clip.Tag, clip.File, true);
                 }
             });
+        }
+
+        /// <summary>把缓存里的同格式 WAV(PCM) 片段裁剪首尾静音后拼成单段；不可用时返回 null。</summary>
+        string? TryBuildWavSequence(List<(string Text, string Tag, string File)> clips)
+        {
+            if (clips.Count < 2) return null;
+            string tag = clips[0].Tag;
+            if (tag != "edge" && tag != "azure") return null;
+
+            WavFormat? common = null;
+            var parts = new List<byte[]>(clips.Count);
+            var fingerprint = new StringBuilder("wav2|").Append(tag).Append('|').Append(AppConfig.TtsVoice)
+                .Append('|').Append(WavAudio.HeadPadMs).Append(':').Append(WavAudio.TailPadMs);
+            foreach (var clip in clips)
+            {
+                if (clip.Tag != tag || clip.File.Length == 0) return null;
+                try
+                {
+                    var info = new FileInfo(clip.File);
+                    if (!info.Exists) return null;
+                    byte[] raw = File.ReadAllBytes(clip.File);
+                    if (!WavAudio.TryReadPcm(raw, out byte[] pcm, out WavFormat format)) return null;
+                    if (common.HasValue && common.Value != format) return null;
+                    common = format;
+                    byte[] trimmed = WavAudio.TrimSilence(pcm, format);
+                    if (trimmed.Length == 0) return null;
+                    parts.Add(trimmed);
+                    fingerprint.Append('|').Append(clip.Text).Append(':')
+                        .Append(info.Length).Append(':').Append(info.LastWriteTimeUtc.Ticks);
+                }
+                catch { return null; }
+            }
+            if (!common.HasValue) return null;
+
+            byte[] wav = WavAudio.BuildWav(parts, common.Value);
+            if (wav.Length <= 44) return null;
+            string file = Path.Combine(CacheDir, "seqw-" + Md5Hex(fingerprint.ToString()) + ".wav");
+            try
+            {
+                if (File.Exists(file) && new FileInfo(file).Length == wav.Length) return file;
+                Directory.CreateDirectory(CacheDir);
+                string temp = file + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                File.WriteAllBytes(temp, wav);
+                if (File.Exists(file)) File.Delete(file);
+                File.Move(temp, file);
+                return file;
+            }
+            catch { return null; }
+        }
+
+        static string PlaybackStatus(string tag)
+        {
+            if (tag == "azure") return "♪ 微软神经语音（" + VoiceDisplay() + "）";
+            if (tag == "edge") return "♪ Edge 直连语音（" + VoiceDisplay() + "）";
+            return "♪ 百度在线语音";
+        }
+
+        /// <summary>把缓存里的同格式 MP3 片段拼成单段；音源/采样格式不一致时返回 null，回退逐条播放。</summary>
+        string? TryBuildMp3Sequence(List<(string Text, string Tag, string File)> clips)
+        {
+            if (clips.Count < 2) return null;
+            string tag = clips[0].Tag;
+            if (tag.Length == 0 || tag == "edge" || tag == "azure") return null;
+
+            Mp3Format? common = null;
+            var payloads = new List<byte[]>(clips.Count);
+            var fingerprint = new StringBuilder(tag).Append('|').Append(AppConfig.TtsVoice);
+            foreach (var clip in clips)
+            {
+                if (clip.Tag != tag || clip.File.Length == 0) return null;
+                try
+                {
+                    var info = new FileInfo(clip.File);
+                    if (!info.Exists || info.Length < 128) return null;
+                    byte[] raw = File.ReadAllBytes(clip.File);
+                    if (!TryGetMp3Payload(raw, out byte[] payload, out Mp3Format format)) return null;
+                    if (common.HasValue && common.Value != format) return null;
+                    common = format;
+                    payloads.Add(payload);
+                    fingerprint.Append('|').Append(clip.Text).Append(':')
+                        .Append(info.Length).Append(':').Append(info.LastWriteTimeUtc.Ticks);
+                }
+                catch { return null; }
+            }
+            if (!common.HasValue) return null;
+
+            int total = payloads.Sum(p => p.Length);
+            string file = Path.Combine(CacheDir, "seq-" + Md5Hex(fingerprint.ToString()) + ".mp3");
+            try
+            {
+                if (File.Exists(file) && new FileInfo(file).Length == total) return file;
+                Directory.CreateDirectory(CacheDir);
+                string temp = file + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                using (var fs = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    foreach (var payload in payloads) fs.Write(payload, 0, payload.Length);
+                    fs.Flush(true);
+                }
+                if (File.Exists(file)) File.Delete(file);
+                File.Move(temp, file);
+                return file;
+            }
+            catch { return null; }
+        }
+
+        readonly record struct Mp3Format(int Version, int Layer, int SampleRate, int Channels);
+
+        static bool TryGetMp3Payload(byte[] raw, out byte[] payload, out Mp3Format format)
+        {
+            payload = raw;
+            format = default;
+            int start = 0, end = raw.Length;
+            if (end >= 10 && raw[0] == (byte)'I' && raw[1] == (byte)'D' && raw[2] == (byte)'3')
+            {
+                int size = ((raw[6] & 0x7F) << 21) | ((raw[7] & 0x7F) << 14)
+                         | ((raw[8] & 0x7F) << 7) | (raw[9] & 0x7F);
+                start = 10 + size + ((raw[5] & 0x10) != 0 ? 10 : 0);
+            }
+            if (start < 0 || start >= end) return false;
+            if (end - start >= 128 && raw[end - 128] == (byte)'T'
+                && raw[end - 127] == (byte)'A' && raw[end - 126] == (byte)'G') end -= 128;
+            if (!TryFindMp3Frame(raw, start, end, out int offset, out format)) return false;
+            if (offset == 0 && end == raw.Length) return true;
+            payload = new byte[end - offset];
+            Buffer.BlockCopy(raw, offset, payload, 0, payload.Length);
+            return true;
+        }
+
+        static readonly int[] Mp3RatesMpeg1 = { 44100, 48000, 32000 };
+        static readonly int[] Mp3RatesMpeg2 = { 22050, 24000, 16000 };
+        static readonly int[] Mp3RatesMpeg25 = { 11025, 12000, 8000 };
+        static readonly int[] Mp3BitratesMpeg1 = { 0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320 };
+        static readonly int[] Mp3BitratesMpeg2 = { 0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160 };
+
+        static bool TryFindMp3Frame(byte[] data, int start, int end, out int offset, out Mp3Format format)
+        {
+            offset = 0;
+            format = default;
+            int limit = Math.Min(end - 4, start + 8192);
+            for (int i = start; i <= limit; i++)
+            {
+                if (data[i] != 0xFF || (data[i + 1] & 0xE0) != 0xE0) continue;
+                uint h = (uint)(data[i] << 24 | data[i + 1] << 16 | data[i + 2] << 8 | data[i + 3]);
+                int version = (int)((h >> 19) & 0x3);
+                int layer = (int)((h >> 17) & 0x3);
+                int bitrateIndex = (int)((h >> 12) & 0xF);
+                int rateIndex = (int)((h >> 10) & 0x3);
+                int padding = (int)((h >> 9) & 0x1);
+                int channelMode = (int)((h >> 6) & 0x3);
+                if (version == 1 || layer != 1 || bitrateIndex == 0
+                    || bitrateIndex == 15 || rateIndex == 3) continue;
+                int sampleRate = version == 3 ? Mp3RatesMpeg1[rateIndex]
+                    : version == 2 ? Mp3RatesMpeg2[rateIndex] : Mp3RatesMpeg25[rateIndex];
+                int bitrate = (version == 3 ? Mp3BitratesMpeg1[bitrateIndex] : Mp3BitratesMpeg2[bitrateIndex]) * 1000;
+                int frameLength = (version == 3 ? 144 : 72) * bitrate / sampleRate + padding;
+                if (frameLength < 4 || i + frameLength > end) continue;
+                offset = i;
+                format = new Mp3Format(version, layer, sampleRate, channelMode == 3 ? 1 : 2);
+                return true;
+            }
+            return false;
+        }
+
+        static string Md5Hex(string text)
+        {
+            using var md5 = MD5.Create();
+            byte[] hash = md5.ComputeHash(Encoding.UTF8.GetBytes(text));
+            var sb = new StringBuilder(hash.Length * 2);
+            foreach (byte b in hash) sb.Append(b.ToString("x2"));
+            return sb.ToString();
+        }
+
+        /// <summary>自检用：验证 WAV(PCM) 解析、首尾静音裁剪与无缝拼接。</summary>
+        internal static bool WavSequenceSelfTest(out string detail) => WavAudio.SelfTest(out detail);
+
+        /// <summary>自检用：构造 MPEG-1/2 Layer III 帧，验证帧长识别与 ID3v2/ID3v1 剥离。</summary>
+        internal static bool Mp3ParserSelfTest()
+            => Mp3CaseSelfTest(0xF3, 0x64, 0xC4, 144, 2, 24000, 1)
+            && Mp3CaseSelfTest(0xFB, 0x90, 0x00, 417, 3, 44100, 2);
+
+        static bool Mp3CaseSelfTest(byte b1, byte b2, byte b3, int frameLength,
+            int version, int sampleRate, int channels)
+        {
+            byte[] plain = new byte[frameLength * 3];
+            for (int f = 0; f < 3; f++)
+            {
+                int o = f * frameLength;
+                plain[o] = 0xFF; plain[o + 1] = b1; plain[o + 2] = b2; plain[o + 3] = b3;
+                for (int k = 4; k < frameLength; k++) plain[o + k] = (byte)(f * 31 + k);
+            }
+            if (!TryGetMp3Payload(plain, out byte[] payload, out Mp3Format format)) return false;
+            if (payload.Length != plain.Length
+                || format != new Mp3Format(version, 1, sampleRate, channels)) return false;
+
+            byte[] tagged = new byte[26 + plain.Length + 128];
+            tagged[0] = (byte)'I'; tagged[1] = (byte)'D'; tagged[2] = (byte)'3';
+            tagged[3] = 4; tagged[9] = 16;                       // 16 字节 ID3v2
+            Buffer.BlockCopy(plain, 0, tagged, 26, plain.Length);
+            int tagAt = 26 + plain.Length;                       // 128 字节 ID3v1
+            tagged[tagAt] = (byte)'T'; tagged[tagAt + 1] = (byte)'A'; tagged[tagAt + 2] = (byte)'G';
+
+            return TryGetMp3Payload(tagged, out byte[] stripped, out Mp3Format taggedFormat)
+                && stripped.Length == plain.Length && stripped[0] == 0xFF && taggedFormat == format;
         }
 
         public void Speak(string text)
@@ -789,7 +1185,6 @@ namespace LuckyPickerWpf
             tag = EffectiveSource();
             file = "";
             if (!onlineOk || AppConfig.TtsSource == "off" || tag == "off") return false;
-            string ext = tag == "edge" ? "wav" : "mp3";
             file = CachePath(tag, text);
             if (File.Exists(file)) return true;
             if (g != gen || stopped) return false;
@@ -847,22 +1242,49 @@ namespace LuckyPickerWpf
         {
             if (g != gen || stopped) return;
             if (file.Length == 0) { SapiFallback(g, text, waitForFallback); return; }
-            PlayFile(tag, file);
+            PlayFile(file);
             SetStatus(tag == "azure" ? "♪ 微软神经语音（" + VoiceDisplay() + "）"
                 : tag == "edge" ? "♪ Edge 直连语音（" + VoiceDisplay() + "）"
                 : "♪ 百度在线语音");
         }
 
-        void PlayFile(string tag, string file)
+        bool PlayFile(string file)
         {
-            if (tag == "edge")
+            if (file.EndsWith(".wav", StringComparison.OrdinalIgnoreCase)) return PlayWavTrimmed(file);
+            return MfPlayer.Play(file, 60000);
+        }
+
+        static bool PlayWavTrimmed(string file)
+        {
+            try
+            {
+                byte[] raw = File.ReadAllBytes(file);
+                if (WavAudio.TryReadPcm(raw, out byte[] pcm, out WavFormat format))
+                {
+                    byte[] trimmed = WavAudio.TrimSilence(pcm, format);
+                    byte[] wav = trimmed.Length > 0 ? WavAudio.BuildWav(new[] { trimmed }, format) : raw;
+                    using (var ms = new MemoryStream(wav, false))
+                    using (var sp = new System.Media.SoundPlayer(ms))
+                    {
+                        sp.PlaySync();
+                        return true;
+                    }
+                }
+            }
+            catch { }
+            try
             {
                 using (var sp = new System.Media.SoundPlayer(file)) sp.PlaySync();
+                return true;
             }
-            else
-            {
-                MfPlayer.Play(file, 60000);
-            }
+            catch { return false; }
+        }
+
+        void SapiSequenceFallback(int g, List<string> texts)
+        {
+            if (sapi == null || g != gen || stopped) return;
+            SetStatus("♪ 本地语音（离线/备用）");
+            try { sapi.SpeakAsyncCancelAll(); sapi.Speak(string.Join("、", texts)); } catch { }
         }
 
         void SapiFallback(int g, string text, bool wait = false)
@@ -900,7 +1322,12 @@ namespace LuckyPickerWpf
             using (var md5 = MD5.Create()) h = md5.ComputeHash(Encoding.UTF8.GetBytes(key));
             var sb = new StringBuilder();
             foreach (var b in h) sb.Append(b.ToString("x2"));
-            return Path.Combine(CacheDir, sb.ToString() + (tag == "edge" ? ".wav" : ".mp3"));
+            return Path.Combine(CacheDir, sb.ToString() + AudioExt(tag));
+        }
+
+        static string AudioExt(string tag)
+        {
+            return tag == "edge" || tag == "azure" ? ".wav" : ".mp3";
         }
 
         void PruneCache()
@@ -939,7 +1366,6 @@ namespace LuckyPickerWpf
                     if (prefetchCancelled || stopped) break;
                     try
                     {
-                        string ext = tag == "edge" ? "wav" : "mp3";
                         string file = CachePath(tag, name);
                         if (!File.Exists(file))
                         {
@@ -950,7 +1376,6 @@ namespace LuckyPickerWpf
                                 if (data == null && AppConfig.TtsSource == "auto")
                                 {
                                     tag = "baidu";
-                                    ext = "mp3";
                                     file = CachePath(tag, name);
                                 }
                             }
@@ -1016,7 +1441,6 @@ namespace LuckyPickerWpf
                 if (!onlineOk || AppConfig.TtsSource == "off") { Thread.Sleep(300); continue; }
                 string tag = EffectiveSource();
                 if (tag == "off") { Thread.Sleep(300); continue; }
-                string ext = tag == "edge" ? "wav" : "mp3";
                 string file = CachePath(tag, name);
                 if (File.Exists(file)) continue;
                 try
@@ -1028,7 +1452,6 @@ namespace LuckyPickerWpf
                         if (data == null && AppConfig.TtsSource == "auto")
                         {
                             tag = "baidu";
-                            ext = "mp3";
                             file = CachePath(tag, name);
                         }
                     }

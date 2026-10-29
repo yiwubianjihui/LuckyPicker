@@ -20,9 +20,9 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("YBH幸运摇人器 安装程序")]
 [assembly: AssemblyProduct("YBH幸运摇人器")]
 [assembly: AssemblyCompany("YBH")]
-[assembly: AssemblyVersion("1.1.0.0")]
-[assembly: AssemblyFileVersion("1.1.0.0")]
-[assembly: AssemblyInformationalVersion("1.1+19")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyInformationalVersion("1.2+21")]
 
 namespace LuckyPickerSetupWpf
 {
@@ -37,7 +37,7 @@ namespace LuckyPickerSetupWpf
         public const string LegacyShortcutName = "幸运摇人器";
         public const string UninstallShortcutName = "卸载 YBH幸运摇人器";
         public const string RegKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\LuckyPicker";
-        public const string Version = "1.1+19";
+        public const string Version = "1.2+21";
         public const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
         public const string RunValueName = "YBHLuckyPicker";
 

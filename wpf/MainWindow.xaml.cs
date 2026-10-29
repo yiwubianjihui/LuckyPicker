@@ -157,6 +157,7 @@ namespace LuckyPickerWpf
         {
             animating = false;
             PickedName.Text = "——";
+            PickedName.Opacity = 0.16;
             MultiPanel.Visibility = Visibility.Collapsed;
             PickedName.Visibility = Visibility.Visible;
             HintText.Text = "点击「抽一人」开始抽取";
@@ -170,6 +171,7 @@ namespace LuckyPickerWpf
             Dispatcher.BeginInvoke(async () =>
             {
                 animating = true;
+                PickedName.Opacity = 1;
                 for (int i = 0; animating && i < 8; i++)
                 {
                     PickedName.Text = names[Random.Shared.Next(names.Count)];
@@ -186,6 +188,7 @@ namespace LuckyPickerWpf
 
         Task ShowMultiAsync(List<string> names)
         {
+            var t = ThemeManager.Current;
             var tcs = new TaskCompletionSource<bool>();
             Dispatcher.BeginInvoke(() =>
             {
@@ -194,8 +197,8 @@ namespace LuckyPickerWpf
                 {
                     MultiPanel.Children.Add(new Border
                     {
-                        Background = new SolidColorBrush(Color.FromRgb(238, 242, 255)),
-                        BorderBrush = new SolidColorBrush(Color.FromRgb(199, 210, 254)),
+                        Background = new SolidColorBrush(t.AccentSoft),
+                        BorderBrush = new SolidColorBrush(t.AccentSoftBorder),
                         BorderThickness = new Thickness(1),
                         CornerRadius = new CornerRadius(12),
                         Padding = new Thickness(16, 10, 16, 10),
@@ -203,7 +206,7 @@ namespace LuckyPickerWpf
                         Child = new TextBlock
                         {
                             Text = n, FontSize = 16, FontWeight = FontWeights.SemiBold,
-                            Foreground = new SolidColorBrush(Color.FromRgb(67, 56, 202))
+                            Foreground = new SolidColorBrush(t.AccentInk)
                         }
                     });
                 }
@@ -261,6 +264,7 @@ namespace LuckyPickerWpf
 
         void RenderBlockChips()
         {
+            var t = ThemeManager.Current;
             BlockChips.Children.Clear();
             foreach (var n in core.blockNames)
             {
@@ -269,9 +273,9 @@ namespace LuckyPickerWpf
                 {
                     Content = n + " ✕", FontSize = 12, Padding = new Thickness(11, 4, 11, 4),
                     Margin = new Thickness(0, 0, 6, 6), Cursor = Cursors.Hand,
-                    Background = new SolidColorBrush(Color.FromRgb(255, 247, 237)),
-                    Foreground = new SolidColorBrush(Color.FromRgb(154, 82, 22)),
-                    BorderBrush = new SolidColorBrush(Color.FromRgb(254, 215, 170)),
+                    Background = new SolidColorBrush(t.BlockChipBg),
+                    Foreground = new SolidColorBrush(t.BlockChipInk),
+                    BorderBrush = new SolidColorBrush(t.BlockChipBorder),
                     BorderThickness = new Thickness(1),
                     Style = (Style)FindResource("GhostBtn")
                 };
@@ -292,7 +296,8 @@ namespace LuckyPickerWpf
             {
                 Icon = Icon,
                 Title = "语音设置", Width = 440, Height = 420,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this,
+                Background = new SolidColorBrush(ThemeManager.Current.Surface)
             };
             var panel = new StackPanel { Margin = new Thickness(22) };
 
@@ -331,7 +336,7 @@ namespace LuckyPickerWpf
             var hint = new TextBlock
             {
                 Text = "选择后立即生效。网络引擎需要联网；无网络时自动使用本地语音。",
-                FontSize = 11, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(100, 116, 139)),
+                FontSize = 11, Foreground = new SolidColorBrush(ThemeManager.Current.Sub),
                 TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12)
             };
             panel.Children.Add(hint);
@@ -511,13 +516,19 @@ namespace LuckyPickerWpf
 
         // ---------- 设置窗口（统一设置） ----------
         SettingsWindow? settingsWin;
+        const int SettingsRosterPage = 2;
+        const int SettingsHistoryPage = 3;
         void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
+        void OnRosterClick(object sender, RoutedEventArgs e) => OpenSettingsAt(SettingsRosterPage);
+        void OnHistoryClick(object sender, RoutedEventArgs e) => OpenSettingsAt(SettingsHistoryPage);
 
-        void OpenSettings(bool history = false)
+        void OpenSettings(bool history = false) => OpenSettingsAt(history ? SettingsHistoryPage : -1);
+
+        void OpenSettingsAt(int page)
         {
             if (settingsWin != null && settingsWin.IsLoaded)
             {
-                if (history) settingsWin.ShowHistory();
+                if (page >= 0) settingsWin.ShowPageAt(page);
                 settingsWin.Activate();
                 return;
             }
@@ -530,10 +541,11 @@ namespace LuckyPickerWpf
                 showUpdateDownload: res => ShowUpdateDownload(res, settingsWin, modal: false),
                 speak: text => { try { Speak(text); } catch { } },
                 changeDefaultClass: () => { AppConfig.DefaultClassId = ""; AppConfig.Save(); classChosen = false; ShowClassMini(); },
-                onQuit: QuitApp);
+                onQuit: QuitApp,
+                themeChanged: ApplyTheme);
             settingsWin.Closed += (s, e) => settingsWin = null;
             settingsWin.Show();
-            if (history) settingsWin.ShowHistory();
+            if (page >= 0) settingsWin.ShowPageAt(page);
         }
 
         /// <summary>把悬浮球相关的配置一次性应用到球上（设置窗口调用，立即生效 + 已随 AppConfig.Save 持久化）。</summary>
@@ -543,6 +555,24 @@ namespace LuckyPickerWpf
             ball.SetSize(AppConfig.BallDiameter);        // 立即应用尺寸
             ball.SetPinned(AppConfig.BallPinned);        // 固定状态（含"始终活跃"）
             ApplyBallVisibility();                       // 显示 / 隐藏
+        }
+
+        /// <summary>配色切换后刷新主窗口里代码创建的部分（XAML 侧由 DynamicResource 自动更新）。</summary>
+        public void ApplyTheme()
+        {
+            try { RenderBlockChips(); } catch { }
+            try
+            {
+                var t = ThemeManager.Current;
+                foreach (var b in MultiPanel.Children.OfType<Border>())
+                {
+                    b.Background = new SolidColorBrush(t.AccentSoft);
+                    b.BorderBrush = new SolidColorBrush(t.AccentSoftBorder);
+                    if (b.Child is TextBlock tb) tb.Foreground = new SolidColorBrush(t.AccentInk);
+                }
+            }
+            catch { }
+            try { ball?.ApplyTheme(); } catch { }
         }
 
         /// <summary>名单保存/导入后刷新主窗口（设置窗口内嵌编辑器调用）。</summary>
@@ -617,6 +647,7 @@ namespace LuckyPickerWpf
         {
             string text = n.ToString();
             PickedName.Text = text;
+            PickedName.Opacity = 1;
             MultiPanel.Visibility = Visibility.Collapsed;
             HintText.Text = "√ 已生成编号：" + text + "（范围 " + lo + " ~ " + hi + "）";
             ball?.ShowPicked(text);
@@ -626,35 +657,36 @@ namespace LuckyPickerWpf
 
         void OnRandomNumber(object sender, RoutedEventArgs e)
         {
+            var t = ThemeManager.Current;
             var dlg = new Window
             {
                 Title = "随机编号", Width = 372, Height = 258,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this,
                 ResizeMode = ResizeMode.NoResize,
-                Background = new SolidColorBrush(Color.FromRgb(255, 255, 255))
+                Background = new SolidColorBrush(t.Surface)
             };
             var root = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
             root.Children.Add(new TextBlock
             {
                 Text = "随机编号（未导入名单时抽取编号）",
                 FontSize = 13.5, FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)),
+                Foreground = new SolidColorBrush(t.Ink),
                 Margin = new Thickness(0, 0, 0, 16)
             });
 
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 4) };
             row.Children.Add(new TextBlock { Text = "编号范围", FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 12, 0) });
-            var tbMin = new TextBox { Text = "1", Width = 74, Height = 36, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 4, 10, 4), BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1) };
+            var tbMin = new TextBox { Text = "1", Width = 74, Height = 36, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 4, 10, 4), Background = new SolidColorBrush(t.SurfaceMuted), Foreground = new SolidColorBrush(t.Ink), CaretBrush = new SolidColorBrush(t.Accent), BorderBrush = new SolidColorBrush(t.Stroke), BorderThickness = new Thickness(1) };
             row.Children.Add(tbMin);
             row.Children.Add(new TextBlock { Text = " ~ ", FontSize = 13, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(10, 0, 10, 0) });
-            var tbMax = new TextBox { Text = "50", Width = 74, Height = 36, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 4, 10, 4), BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)), BorderThickness = new Thickness(1) };
+            var tbMax = new TextBox { Text = "50", Width = 74, Height = 36, FontSize = 13, VerticalContentAlignment = VerticalAlignment.Center, Padding = new Thickness(10, 4, 10, 4), Background = new SolidColorBrush(t.SurfaceMuted), Foreground = new SolidColorBrush(t.Ink), CaretBrush = new SolidColorBrush(t.Accent), BorderBrush = new SolidColorBrush(t.Stroke), BorderThickness = new Thickness(1) };
             row.Children.Add(tbMax);
             root.Children.Add(row);
 
             var chkNoRepeat = new CheckBox
             {
                 Content = "不重复（抽过的编号不再出现）", IsChecked = true, FontSize = 12,
-                Foreground = new SolidColorBrush(Color.FromRgb(71, 85, 105)),
+                Foreground = new SolidColorBrush(t.InkSoft),
                 Margin = new Thickness(0, 10, 0, 0)
             };
             root.Children.Add(chkNoRepeat);
@@ -802,6 +834,7 @@ namespace LuckyPickerWpf
         // ---------------- 名单编辑（表格直接增删改） ----------------
         void ShowRosterEditor()
         {
+            var t = ThemeManager.Current;
             var dlg = new Window
             {
                 Icon = Icon,
@@ -823,10 +856,10 @@ namespace LuckyPickerWpf
                 Margin = new Thickness(0, 0, 0, 10), CanUserDeleteRows = true,
                 RowHeight = 34, FontSize = 13,
                 GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
-                HorizontalGridLinesBrush = new SolidColorBrush(Color.FromRgb(241, 245, 249)),
-                Background = Brushes.White, BorderBrush = new SolidColorBrush(Color.FromRgb(226, 232, 240)),
-                BorderThickness = new Thickness(1), RowBackground = Brushes.White,
-                AlternatingRowBackground = new SolidColorBrush(Color.FromRgb(250, 251, 253)),
+                HorizontalGridLinesBrush = new SolidColorBrush(t.Canvas),
+                Background = new SolidColorBrush(t.Surface), BorderBrush = new SolidColorBrush(t.Stroke),
+                BorderThickness = new Thickness(1), RowBackground = new SolidColorBrush(t.Surface),
+                AlternatingRowBackground = new SolidColorBrush(t.SurfaceMuted),
                 UseLayoutRounding = true, SnapsToDevicePixels = true
             };
             grid.Columns.Add(new DataGridTextColumn
@@ -866,7 +899,7 @@ namespace LuckyPickerWpf
             {
                 Text = "双击单元格直接修改；最后一行为新增行；选中行后按 Delete 或点「删除选中行」移除。",
                 FontSize = 11.5, TextWrapping = TextWrapping.Wrap,
-                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(100, 116, 139)),
+                Foreground = new SolidColorBrush(t.Sub),
                 Margin = new Thickness(0, 0, 0, 10)
             };
             Grid.SetRow(tip, 1);
@@ -910,6 +943,7 @@ namespace LuckyPickerWpf
 
         void ShowEditorDialog()
         {
+            var t = ThemeManager.Current;
             var dlg = new Window
             {
                 Icon = Icon,
@@ -928,7 +962,7 @@ namespace LuckyPickerWpf
             var btnImport = new Button { Content = "导入 Excel / CSV / JSON 名单", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modern };
             var btnExport = new Button { Content = "导出备份（复制名单文件到桌面）", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modernGhost };
             var btnOpenDir = new Button { Content = "打开名单所在文件夹", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modernGhost };
-            var status = new TextBlock { FontSize = 12, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(6, 95, 70)), TextWrapping = TextWrapping.Wrap };
+            var status = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(t.AccentInk), TextWrapping = TextWrapping.Wrap };
 
             btnImport.Click += (s, e) =>
             {
@@ -1004,7 +1038,7 @@ namespace LuckyPickerWpf
             });
             var prog = new ProgressBar { Height = 16, Maximum = names.Count, Minimum = 0, Margin = new Thickness(0, 14, 0, 10) };
             panel.Children.Add(prog);
-            var txt = new TextBlock { Text = "准备中…", FontSize = 12, Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(100, 116, 139)) };
+            var txt = new TextBlock { Text = "准备中…", FontSize = 12, Foreground = new SolidColorBrush(ThemeManager.Current.Sub) };
             panel.Children.Add(txt);
             var btnCancel = new Button
             {
@@ -1084,7 +1118,7 @@ namespace LuckyPickerWpf
                 if (!string.IsNullOrEmpty(res.Notes)) txt += "\n更新说明：\n" + res.Notes;
                 txt += "\n\n" + (res.HasUpdate ? "★ 发现新版本！可在官网下载：\n" + res.DownloadUrl : "✓ 当前已是最新版本");
                 resultBox.Text = txt;
-                resultBox.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(51, 65, 85));
+                resultBox.Foreground = new SolidColorBrush(ThemeManager.Current.InkSoft);
                 if (res.HasUpdate)
                 {
                     var ask = MessageBox.Show(this,
@@ -1102,6 +1136,7 @@ namespace LuckyPickerWpf
         // ---------- 更新：后台下载安装器 ----------
         void ShowUpdateDownload(UpdateResult res, Window? owner = null, bool modal = true)
         {
+            var t = ThemeManager.Current;
             string url = !string.IsNullOrEmpty(res.SetupUrl) ? res.SetupUrl : res.DownloadUrl;
             if (string.IsNullOrEmpty(url))
             {
@@ -1127,20 +1162,20 @@ namespace LuckyPickerWpf
                 Title = "下载更新 " + res.LatestVersion, Width = 420, Height = 210,
                 WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = owner ?? (Window)this,
                 ResizeMode = ResizeMode.NoResize,
-                Background = new SolidColorBrush(Color.FromRgb(255, 255, 255))
+                Background = new SolidColorBrush(t.Surface)
             };
             var root = new StackPanel { Margin = new Thickness(22, 18, 22, 18) };
             root.Children.Add(new TextBlock
             {
                 Text = "正在后台下载安装程序…", FontSize = 13.5, FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(30, 41, 59)), Margin = new Thickness(0, 0, 0, 14)
+                Foreground = new SolidColorBrush(t.Ink), Margin = new Thickness(0, 0, 0, 14)
             });
             var bar = new ProgressBar { Height = 12, Minimum = 0, Maximum = 100, Value = 0 };
             root.Children.Add(bar);
             var status = new TextBlock
             {
                 Text = "准备中…", FontSize = 12, Margin = new Thickness(0, 10, 0, 0),
-                Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139))
+                Foreground = new SolidColorBrush(t.Sub)
             };
             root.Children.Add(status);
 
@@ -1169,7 +1204,7 @@ namespace LuckyPickerWpf
                 bOpen.IsEnabled = false;
                 bar.Value = 0;
                 status.Text = "正在下载…";
-                status.Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139));
+                status.Foreground = new SolidColorBrush(t.Sub);
                 cts = new System.Threading.CancellationTokenSource();
                 try
                 {
@@ -1211,7 +1246,7 @@ namespace LuckyPickerWpf
                     }
                     bar.Value = 100;
                     status.Text = "下载完成，可点击「打开安装程序」安装。";
-                    status.Foreground = new SolidColorBrush(Color.FromRgb(6, 122, 91));
+                    status.Foreground = new SolidColorBrush(t.AccentInk);
                     bOpen.IsEnabled = true;
                     bRetry.IsEnabled = true;
                 }
@@ -1295,6 +1330,7 @@ namespace LuckyPickerWpf
         internal void BallPanelToggleForTest() { ShowBallPanel(); PumpFrames(220); }
         internal double BallShadowPadForTest => ball?.ShadowPadNow ?? -1;
         internal double BallBrushLuminanceForTest => ball?.BrushLuminanceNow ?? -1;
+        internal System.Windows.Media.Color? BallTopColorForTest => ball?.BallTopColorNow;
         internal void BallTouchForTest() => ball?.TouchForTest();
         internal void BallHoverForTest(bool on) => ball?.HoverForTest(on);
         internal bool BallInteractiveForTest => ball?.InteractiveNow ?? false;

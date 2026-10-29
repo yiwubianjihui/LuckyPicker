@@ -5,39 +5,35 @@
         MinHeight="620" MinWidth="760"
         WindowStartupLocation="CenterScreen" PreviewKeyDown="OnWindowKeyDown"
         FontFamily="Microsoft YaHei UI"
-        Background="#F5F7FB"
+        Background="{DynamicResource CanvasBrush}"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
         TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType">
     <Window.Resources>
-        <LinearGradientBrush x:Key="AccentGrad" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#6366F1" Offset="0" />
-            <GradientStop Color="#4F46E5" Offset="1" />
-        </LinearGradientBrush>
         <Style x:Key="BigBtn" TargetType="Button">
-            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontSize" Value="15.5" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="Height" Value="60" />
+            <Setter Property="Height" Value="56" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="Background" Value="{StaticResource AccentGrad}" />
+            <Setter Property="Background" Value="{DynamicResource BrandBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Grid>
                             <Border x:Name="bd" Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
-                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="14" />
-                            <Border x:Name="ov" Background="#FFFFFF" CornerRadius="14" Opacity="0" />
+                                    BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12" />
+                            <Border x:Name="ov" Background="{DynamicResource SurfaceBrush}" CornerRadius="12" Opacity="0" />
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ov" Property="Opacity" Value="0.13" />
+                                <Setter TargetName="ov" Property="Opacity" Value="0.10" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ov" Property="Opacity" Value="0.24" />
+                                <Setter TargetName="ov" Property="Opacity" Value="0.20" />
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.45" />
@@ -51,25 +47,25 @@
             <Setter Property="FontSize" Value="13" />
             <Setter Property="Padding" Value="18,8" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="Foreground" Value="#475569" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
                         <Border x:Name="bd" Background="{TemplateBinding Background}"
-                                BorderBrush="#E2E8F0" BorderThickness="{TemplateBinding BorderThickness}"
+                                BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="{TemplateBinding BorderThickness}"
                                 CornerRadius="10">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
                                               Margin="{TemplateBinding Padding}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#F5F3FF" />
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#C7D2FE" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandSoftHoverBrush}" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource StrokeHoverBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentGrad}" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandBrush}" />
                                 <Setter TargetName="bd" Property="BorderBrush" Value="Transparent" />
                                 <Setter Property="Foreground" Value="White" />
                                 <Setter Property="FontWeight" Value="SemiBold" />
@@ -81,11 +77,11 @@
         </Style>
         <Style x:Key="GhostBtn" TargetType="Button">
             <Setter Property="FontSize" Value="12.5" />
-            <Setter Property="Foreground" Value="#475569" />
+            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
             <Setter Property="Padding" Value="14,7" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Background" Value="#FFFFFF" />
-            <Setter Property="BorderBrush" Value="#E2E8F0" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource StrokeBrush}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -98,12 +94,39 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#F8FAFC" />
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#C7D2FE" />
-                                <Setter Property="Foreground" Value="#4F46E5" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandSoftHoverBrush}" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource StrokeHoverBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource BrandBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#EEF2FF" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandSoftBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="HeaderActionBtn" TargetType="Button">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Foreground" Value="{DynamicResource InkSoftBrush}" />
+            <Setter Property="Padding" Value="12,7" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandSoftHoverBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource BrandInkBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource BrandSoftPressedBrush}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -112,7 +135,7 @@
         </Style>
     </Window.Resources>
 
-    <Grid Margin="30,24,30,20">
+    <Grid Margin="28,24,28,20">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -126,35 +149,43 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <StackPanel>
-                <TextBlock x:Name="TitleText" Text="YBH幸运摇人器" FontSize="28" FontWeight="Bold"
-                           Foreground="#0F172A" />
-                <TextBlock x:Name="SubText" Text="" FontSize="12" Foreground="#64748B" Margin="2,4,0,0" />
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock x:Name="TitleText" Text="YBH幸运摇人器" FontSize="26" FontWeight="SemiBold"
+                           Foreground="{DynamicResource InkBrush}" />
+                <TextBlock x:Name="SubText" Text="" FontSize="12" Foreground="{DynamicResource SubBrush}" Margin="2,4,0,0" />
             </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <Border Background="#EEF2FF" CornerRadius="10" Padding="14,8" Margin="0,0,10,0">
-                    <TextBlock x:Name="ClassBadgeText" Text="● 当前班级：-" FontSize="12"
-                               Foreground="#4338CA" VerticalAlignment="Center" />
-                </Border>
-                <Button x:Name="SettingsBtn" Content="设置" Style="{StaticResource GhostBtn}"
-                        Padding="18,8" Click="OnSettingsClick" />
-            </StackPanel>
+            <Border Grid.Column="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                    CornerRadius="12" Padding="5,4" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <Border Background="{DynamicResource BrandSoftBrush}" CornerRadius="8" Padding="10,6" Margin="0,0,4,0">
+                        <TextBlock x:Name="ClassBadgeText" Text="● 当前班级：-" FontSize="12"
+                                   Foreground="{DynamicResource BrandInkBrush}" VerticalAlignment="Center" />
+                    </Border>
+                    <Border Width="1" Background="{DynamicResource StrokeBrush}" Margin="2,6,4,6" />
+                    <Button x:Name="RosterBtn" Content="名单管理" Style="{StaticResource HeaderActionBtn}"
+                            Click="OnRosterClick" />
+                    <Button x:Name="HistoryBtn" Content="抽取记录" Style="{StaticResource HeaderActionBtn}"
+                            Click="OnHistoryClick" />
+                    <Button x:Name="SettingsBtn" Content="设置" Style="{StaticResource HeaderActionBtn}"
+                            Click="OnSettingsClick" />
+                </StackPanel>
+            </Border>
         </Grid>
 
-        <Border Grid.Row="1" Background="#FFFFFF" BorderBrush="#E8EDF5" BorderThickness="1"
+        <Border Grid.Row="1" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
                 CornerRadius="14" Padding="16,12" Margin="0,20,0,0">
             <StackPanel Orientation="Horizontal">
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,26,0">
-                    <TextBlock Text="班级" FontSize="13" FontWeight="SemiBold" Foreground="#334155"
+                    <TextBlock Text="班级" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource InkSoftBrush}"
                                VerticalAlignment="Center" Margin="0,0,10,0" />
                     <ComboBox x:Name="ClassCombo" MinWidth="150" VerticalContentAlignment="Center"
                               Style="{StaticResource ModernCombo}" SelectionChanged="OnClassChanged" />
                     <CheckBox x:Name="ClassDefaultChk" Content="设为默认" IsChecked="True" FontSize="12"
-                              Foreground="#64748B" VerticalAlignment="Center" Margin="10,0,0,0"
+                              Foreground="{DynamicResource SubBrush}" VerticalAlignment="Center" Margin="10,0,0,0"
                               Checked="OnClassDefaultChk" Unchecked="OnClassDefaultChk" />
                 </StackPanel>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="性别" FontSize="13" FontWeight="SemiBold" Foreground="#334155"
+                    <TextBlock Text="性别" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource InkSoftBrush}"
                                VerticalAlignment="Center" Margin="0,0,10,0" />
                     <ToggleButton x:Name="GenderAll" Content="都抽" IsChecked="True" Style="{StaticResource GenderPill}" Click="OnGenderClick" Margin="0,0,8,0" />
                     <ToggleButton x:Name="GenderMale" Content="男生" Style="{StaticResource GenderPill}" Click="OnGenderClick" Margin="0,0,8,0" />
@@ -163,26 +194,26 @@
             </StackPanel>
         </Border>
 
-        <Grid Grid.Row="2" Margin="0,16,0,0">
+        <Grid Grid.Row="2" Margin="0,14,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
             <Button x:Name="PickBtn" Grid.Column="0" Content="抽一人"
-                    Style="{StaticResource BigBtn}" Margin="0,0,8,0" Click="OnPick" />
+                    Style="{StaticResource BigBtn}" Margin="0,0,6,0" Click="OnPick" />
             <Button x:Name="MultiBtn" Grid.Column="1" Content="连抽五人"
-                    Style="{StaticResource BigBtn}" Background="#EEF2FF" Foreground="#4338CA"
-                    BorderBrush="#C7D2FE" Margin="4,0" Click="OnMulti" />
+                    Style="{StaticResource BigBtn}" Background="{DynamicResource BrandSoftBrush}" Foreground="{DynamicResource BrandInkBrush}"
+                    BorderBrush="{DynamicResource BrandSoftBorderBrush}" Margin="3,0" Click="OnMulti" />
             <Button x:Name="NumBtn" Grid.Column="2" Content="随机编号"
-                    Style="{StaticResource BigBtn}" Background="#FFFFFF" Foreground="#475569"
-                    BorderBrush="#E2E8F0" Margin="8,0,0,0" Click="OnRandomNumber" />
+                    Style="{StaticResource BigBtn}" Background="{DynamicResource SurfaceBrush}" Foreground="{DynamicResource InkSoftBrush}"
+                    BorderBrush="{DynamicResource StrokeBrush}" Margin="6,0,0,0" Click="OnRandomNumber" />
         </Grid>
 
-        <Grid Grid.Row="3" Margin="0,16,0,0">
-            <Border Background="#E2E8F0" CornerRadius="18" Margin="1,3,1,0" Opacity="0.55" />
-            <Border Background="#FFFFFF" BorderBrush="#E8EDF5" BorderThickness="1"
-                    CornerRadius="18" Padding="24,18">
+        <Grid Grid.Row="3" Margin="0,14,0,0">
+            <Border Background="{DynamicResource CardShadowBrush}" CornerRadius="16" Margin="1,3,1,0" Opacity="0.55" />
+            <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                    CornerRadius="16" Padding="26,20">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
@@ -194,38 +225,38 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <Border Background="#ECFDF5" CornerRadius="9" Padding="12,5" HorizontalAlignment="Left">
-                            <TextBlock x:Name="VoiceStatusText" Text="♪ 语音：准备中" FontSize="11" Foreground="#047857" TextTrimming="CharacterEllipsis" />
+                        <Border Background="{DynamicResource SurfaceMutedBrush}" CornerRadius="9" Padding="12,5" HorizontalAlignment="Left">
+                            <TextBlock x:Name="VoiceStatusText" Text="♪ 语音：准备中" FontSize="11" Foreground="{DynamicResource SubBrush}" TextTrimming="CharacterEllipsis" />
                         </Border>
                         <StackPanel Grid.Column="1" Orientation="Horizontal">
                             <TextBlock x:Name="PoolStatsText" Text="" FontSize="12" VerticalAlignment="Center"
-                                       Foreground="#64748B" Margin="0,0,12,0" />
+                                       Foreground="{DynamicResource SubBrush}" Margin="0,0,12,0" />
                             <Button x:Name="ResetBtn" Content="重置" Style="{StaticResource GhostBtn}"
                                     Padding="14,5" Click="OnReset" />
                         </StackPanel>
                     </Grid>
                     <Grid Grid.Row="1" VerticalAlignment="Center">
-                        <TextBlock x:Name="PickedName" Text="——" FontSize="58" FontWeight="Bold"
-                                   Foreground="#0F172A" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <TextBlock x:Name="PickedName" Text="——" FontSize="58" FontWeight="Bold" Opacity="0.16"
+                                   Foreground="{DynamicResource InkBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         <WrapPanel x:Name="MultiPanel" HorizontalAlignment="Center" VerticalAlignment="Center"
                                    Visibility="Collapsed" />
                     </Grid>
                     <TextBlock x:Name="HintText" Grid.Row="2" Text="点击「抽一人」开始抽取"
-                               FontSize="12.5" Foreground="#64748B" />
+                               FontSize="12.5" Foreground="{DynamicResource SubBrush}" />
                 </Grid>
             </Border>
         </Grid>
 
-        <Border Grid.Row="4" Background="#FFFFFF" BorderBrush="#E8EDF5" BorderThickness="1"
-                CornerRadius="14" Margin="0,14,0,0" Padding="16,12">
+        <Border Grid.Row="4" Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1"
+                CornerRadius="14" Margin="0,12,0,0" Padding="16,12">
             <StackPanel>
-                <TextBlock Text="屏蔽名单" FontSize="12" FontWeight="SemiBold" Foreground="#64748B" Margin="0,0,0,8" />
+                <TextBlock Text="屏蔽名单" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource SubBrush}" Margin="0,0,0,8" />
                 <DockPanel>
                     <Button x:Name="AddBlockBtn" DockPanel.Dock="Right" Content="添加屏蔽" Style="{StaticResource GhostBtn}"
                             Padding="16,6" Margin="10,0,0,0" Click="OnAddBlock" />
                     <TextBox x:Name="BlockInput" Height="36" VerticalContentAlignment="Center"
-                             FontSize="12.5" Padding="10,0" Background="#F8FAFC"
-                             BorderBrush="#E2E8F0" BorderThickness="1" KeyDown="OnBlockKeyDown" />
+                             FontSize="12.5" Padding="10,0" Background="{DynamicResource SurfaceMutedBrush}" Foreground="{DynamicResource InkBrush}"
+                             CaretBrush="{DynamicResource BrandBrush}" BorderBrush="{DynamicResource StrokeBrush}" BorderThickness="1" KeyDown="OnBlockKeyDown" />
                 </DockPanel>
                 <WrapPanel x:Name="BlockChips" Margin="0,8,0,0" />
             </StackPanel>

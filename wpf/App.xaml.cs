@@ -77,6 +77,7 @@ namespace LuckyPickerWpf
 
             Log("S1");
             AppConfig.Load();
+            ThemeManager.Apply(AppConfig.Theme);
             Log("S2");
             // 内部版：发布包内附 internal.txt 标记时，直接以包内名单为准（系统数据目录可能无写权限）
             try

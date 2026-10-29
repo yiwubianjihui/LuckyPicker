@@ -114,14 +114,14 @@
   </header>
 
   <div class="card">
-    <span class="ver"><span class="dot"></span> 最新稳定版 1.1+19</span>
+    <span class="ver"><span class="dot"></span> 最新稳定版 1.2+21</span>
     <p class="notes">
       <b>桌面悬浮球</b>：单击抽一人、可拖动、抽中姓名球面显示，投屏远距离可见。<br/>
       <b>开机自启动</b>：登录后仅显示悬浮球，无需管理员权限，卸载自动清理。<br/>
       <b>自然语音</b>：微软神经语音直连播报（与 Edge TTS 同源音色），断网自动降级本地语音。
     </p>
 
-    <a class="dl-main" href="download/LuckyPicker-win-setup-1.1+build19.exe">
+    <a class="dl-main" href="download/LuckyPicker-win-setup-1.2+build21.exe">
       <span class="t">⬇ 下载 Windows 新版</span>
       <span class="s">WPF 重构 · 现代界面 · 安装即用（自带运行环境，无需安装任何依赖）</span>
     </a>
@@ -133,7 +133,7 @@
         <div class="opt">
           <div class="ic">📗</div>
           <div class="txt"><b>Windows 绿色版（WPF）</b><span>免安装解压即用 · 与安装版同版本</span></div>
-          <a class="go" href="download/LuckyPicker-win-wpf-1.1+build19.zip">下载</a>
+          <a class="go" href="download/LuckyPicker-win-wpf-1.2+build21.zip">下载</a>
         </div>
         <div class="opt">
           <div class="ic">📦</div>
@@ -144,12 +144,12 @@
         <div class="opt">
           <div class="ic">📱</div>
           <div class="txt"><b>Android 版</b><span>APK · 支持开机自启开关 · Android 7.0+<br/>Build19 起更换签名密钥，覆盖安装前请先卸载旧版</span></div>
-          <a class="go" href="download/LuckyPicker-android-1.1+build19.apk">下载</a>
+          <a class="go" href="download/LuckyPicker-android-1.2+build21.apk">下载</a>
         </div>
         <div class="opt">
           <div class="ic">🐧</div>
           <div class="txt"><b>Linux 版</b><span>Electron x64 · 解压即用</span></div>
-          <a class="go" href="download/LuckyPicker-linux-1.1+build19.zip">下载</a>
+          <a class="go" href="download/LuckyPicker-linux-1.2+build21.zip">下载</a>
         </div>
         <div class="opt">
           <div class="ic">🌐</div>
@@ -185,7 +185,7 @@
       <li>程序内「版本 · 更新」可检查新版本（默认读取本页 update.json）。</li>
     </ul>
     <p style="margin:12px 0 6px;font-weight:600;font-size:13px;">Windows 安装包 SHA-256：</p>
-    <div class="mono" id="sha">DF309DB5E2078BC3909510678A4E0878EFBB8C1339844AEDC1C8BF9D80A0A388</div>
+    <div class="mono" id="sha">17576D4BC68A7CA8BC952D6A69B00CB17D6CA0FEA778B1D24368B4014D16BB4C</div>
     <p style="margin:8px 0 0;font-size:12.5px;color:var(--sub);">全部文件校验见 <a class="link" href="download/SHA256SUMS.txt">SHA256SUMS.txt</a>。</p>
   </details>
 
@@ -204,6 +204,8 @@
   <div class="card tight">
     <h2>开发记录</h2>
     <div class="tl">
+      <div class="ev"><b>1.2+21 · 连抽播报裁掉首尾静音并无缝拼接，名字间静音从约 0.75 秒降至约 0.12 秒</b><span>2026-10-30</span></div>
+      <div class="ev"><b>1.1+20 · 新增三套配色切换（鼠尾草绿 / 雾霭蓝 / 墨色极简），设置内即时预览并持久化</b><span>2026-10-29</span></div>
       <div class="ev"><b>1.1+19 · 修复托盘菜单，统一设置导航与界面；优化连抽播报和抽人自动取消静音</b><span>2026-10-29</span></div>
       <div class="ev"><b>1.0+18 · 切换版本体系；修复性别筛选，增强数据保存、测试与更新下载安全</b><span>2026-10-29</span></div>
       <div class="ev"><b>26H2 Build 18 · 修掉悬浮球发虚与托盘菜单跑到左上角；自检改用 Win32 实测屏幕矩形断言</b><span>2026-09-15</span></div>

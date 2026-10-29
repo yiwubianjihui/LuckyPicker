@@ -51,7 +51,7 @@ FTP：`47.238.193.61`，上传到 `/LuckyRandom/download/<文件名>`。
 ## 6. 版本号与文案
 
 - 版本规则：自 `1.0+18` 起使用 **`主版本.次版本+构建号`**；每次正式发布构建号递增 1。
-- 当前用户界面与 `update.json` 使用 `1.1+19`；程序集使用 `1.1.0.0`，Electron 包使用 SemVer 等价格式 `1.1.0+19`。
+- 当前用户界面与 `update.json` 使用 `1.2+21`；程序集使用 `1.2.0.0`，Electron 包使用 SemVer 等价格式 `1.2.0+21`。
 - 发布涉及：代码内版本文案（`SubText`）、`app.manifest` assemblyIdentity、
   下载文件名、`update.json`（build/notes）、下载页徽章。
 
@@ -77,8 +77,8 @@ FTP：`47.238.193.61`，上传到 `/LuckyRandom/download/<文件名>`。
 ### 版本矩阵（下载页定版）
 | 位置 | 文件 | 说明 |
 | --- | --- | --- |
-| 主推 | `LuckyPicker-win-wpf-1.1+buildN.zip` | WPF 绿色版 |
-| 选项1 | `LuckyPicker-win-setup-1.1+buildN.exe` | WPF 安装版（Program Files / 管理员 / 覆盖升级 / 卸载） |
+| 主推 | `LuckyPicker-win-wpf-1.2+buildN.zip` | WPF 绿色版 |
+| 选项1 | `LuckyPicker-win-setup-1.2+buildN.exe` | WPF 安装版（Program Files / 管理员 / 覆盖升级 / 卸载） |
 | 选项2/3 | Android / Linux `buildN` | 同步 bump |
 | 选项4 | `portable-26H2-build14.zip` | 经典便携（冻结在 14，不再更新；勿再打新标） |
 | 历史 | GitHub Releases | 全部旧版 |

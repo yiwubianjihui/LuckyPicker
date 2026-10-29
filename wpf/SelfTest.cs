@@ -105,12 +105,17 @@ namespace LuckyPickerWpf
             catch (Exception ex) { A("核心：JSON 原子写入与替换", false, ex.Message); }
             finally { try { File.Delete(temp); } catch { } }
 
-            A("版本：1.1+19 可提取构建号", UpdateManager.ExtractLastInt("1.1+19") == 19);
-            var update = UpdateManager.ParseJson("{\"version\":\"1.1+20\",\"build\":20,\"setupUrl\":\"https://example.com/setup.exe\",\"setupSha256\":\"ABC123\"}");
+            A("版本：1.2+21 可提取构建号", UpdateManager.ExtractLastInt("1.2+21") == 21);
+            A("版本：构建号与显示版本一致", AppVersion.Build == UpdateManager.ExtractLastInt(AppVersion.Display),
+              "Build=" + AppVersion.Build + " Display=" + AppVersion.Display);
+            var update = UpdateManager.ParseJson("{\"version\":\"1.2+22\",\"build\":22,\"setupUrl\":\"https://example.com/setup.exe\",\"setupSha256\":\"ABC123\"}");
             A("更新：解析安装直链与 SHA-256", update.Success && update.HasUpdate && update.SetupUrl == "https://example.com/setup.exe" && update.SetupSha256 == "abc123");
             A("更新：拒绝 HTTP 下载地址", UpdateManager.ParseJson("{\"version\":\"1.0+19\",\"url\":\"http://example.com/setup.exe\"}").DownloadUrl == "");
             A("更新：拒绝 HTTP 检查接口", !UpdateManager.Check("http://example.com/update.json").Success);
             A("语音：可取消默认输出设备静音", AudioUnmute.DefaultOutput(), AudioUnmute.LastError);
+            A("语音：连抽 MP3 合并可识别帧格式并剥离 ID3", TtsEngine.Mp3ParserSelfTest(),
+              "MPEG-1 44.1kHz 与 MPEG-2 24kHz 帧长/声道/标签剥离");
+            A("语音：连抽 WAV 裁剪首尾静音并无缝拼接", TtsEngine.WavSequenceSelfTest(out string wavDetail), wavDetail);
         }
 
         static void Execute(MainWindow win, string outPath)
@@ -429,6 +434,9 @@ namespace LuckyPickerWpf
             Pump(700);
             var sw = win.SettingsWindowForTest;
             A("1a 设置窗口已打开", sw != null && sw.IsVisible, sw == null ? "null" : "visible");
+            if (sw != null)
+                A("1a2 配色卡片已构建", sw.ThemeCardCountForTest == ThemeManager.All.Length,
+                  "cards=" + sw.ThemeCardCountForTest + " all=" + ThemeManager.All.Length);
 
             if (sw != null)
             {
@@ -497,6 +505,49 @@ namespace LuckyPickerWpf
                 Pump(250);
                 A("截图 设置窗口 5 个分类页", shots == 5, shots + "/5 张 → " + shotDir);
 
+                // ---------- 11. 配色主题：切换即时生效 + 持久化 + 悬浮球同步 ----------
+                string oldTheme = AppConfig.Theme;
+                sw.ShowPageForTest(0);
+                Pump(200);
+                A("11a 设置页提供 3 套配色", sw.ThemeCardCountForTest == 3,
+                  "cards=" + sw.ThemeCardCountForTest + " all=" + ThemeManager.All.Length);
+
+                var mist = ThemeManager.Get("mist");
+                bool pickedMist = sw.SelectThemeForTest("mist");
+                Pump(1100);
+                bool mistApplied = pickedMist && ThemeManager.Current.Id == "mist" && AppConfig.Theme == "mist";
+                bool mistWindow = win.Background is SolidColorBrush wbMist && wbMist.Color == mist.Canvas;
+                bool mistButton = win.PickBtn.Background is SolidColorBrush pbMist && pbMist.Color == mist.Accent;
+                A("11b 切换「雾霭蓝」立即生效并写入配置", mistApplied && mistWindow && mistButton,
+                  $"theme={ThemeManager.Current.Id} window={mistWindow} button={mistButton}");
+                bool mistBall = win.BallTopColorForTest.HasValue && win.BallTopColorForTest.Value == mist.BallHi;
+                A("11c 悬浮球同步换色（雾霭蓝）", mistBall,
+                  "ballTop=" + (win.BallTopColorForTest?.ToString() ?? "null") + " 期望=" + mist.BallHi);
+                A("截图 雾霭蓝主窗口", SaveShot(win, Path.Combine(shotRoot, "theme_mist_main.png")),
+                  Path.Combine(shotRoot, "theme_mist_main.png"));
+                A("截图 雾霭蓝设置页", SaveShot(sw, Path.Combine(shotRoot, "theme_mist_settings.png")),
+                  Path.Combine(shotRoot, "theme_mist_settings.png"));
+
+                var ink = ThemeManager.Get("ink");
+                bool pickedInk = sw.SelectThemeForTest("ink");
+                Pump(1100);
+                bool inkApplied = pickedInk && ThemeManager.Current.Id == "ink" && AppConfig.Theme == "ink";
+                bool inkWindow = win.Background is SolidColorBrush wbInk && wbInk.Color == ink.Canvas;
+                bool inkButton = win.PickBtn.Background is SolidColorBrush pbInk && pbInk.Color == ink.Accent;
+                bool inkBall = win.BallTopColorForTest.HasValue && win.BallTopColorForTest.Value == ink.BallHi;
+                A("11d 切换「墨色极简」立即生效并写入配置", inkApplied && inkWindow && inkButton && inkBall,
+                  $"theme={ThemeManager.Current.Id} window={inkWindow} button={inkButton} ball={inkBall}");
+                A("截图 墨色极简主窗口", SaveShot(win, Path.Combine(shotRoot, "theme_ink_main.png")),
+                  Path.Combine(shotRoot, "theme_ink_main.png"));
+                A("截图 墨色极简设置页", SaveShot(sw, Path.Combine(shotRoot, "theme_ink_settings.png")),
+                  Path.Combine(shotRoot, "theme_ink_settings.png"));
+
+                bool pickedBack = sw.SelectThemeForTest(oldTheme);
+                Pump(1100);
+                string nowTheme = ThemeManager.Get(ThemeManager.Current.Id).Id;
+                A("11e 恢复原配色并持久化", pickedBack && nowTheme == ThemeManager.Get(oldTheme).Id && AppConfig.Theme == nowTheme,
+                  "restored=" + nowTheme + " expected=" + ThemeManager.Get(oldTheme).Id);
+
                 win.OpenHistoryForTest();
                 Pump(300);
                 A("6a 抽选记录作为设置内独立导航页打开", win.SettingsCurrentPageForTest(sw) == 3,
@@ -509,6 +560,25 @@ namespace LuckyPickerWpf
                 bool settingsGone = win.SettingsWindowForTest == null;
                 A("6c 设置窗口引用已释放", settingsGone, "settingsWin=" + (settingsGone ? "null" : "非空"));
             }
+
+            // ---------- 顶部快捷入口：直达设置对应分类页 ----------
+            win.RosterBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Pump(700);
+            var swRoster = win.SettingsWindowForTest;
+            A("顶部「名单管理」直达设置·名单管理页",
+              swRoster != null && win.SettingsCurrentPageForTest(swRoster) == 2,
+              "page=" + (swRoster == null ? -1 : win.SettingsCurrentPageForTest(swRoster)));
+            swRoster?.Close();
+            Pump(900);
+
+            win.HistoryBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Pump(700);
+            var swHistory = win.SettingsWindowForTest;
+            A("顶部「抽取记录」直达设置·抽选记录页",
+              swHistory != null && win.SettingsCurrentPageForTest(swHistory) == 3,
+              "page=" + (swHistory == null ? -1 : win.SettingsCurrentPageForTest(swHistory)));
+            swHistory?.Close();
+            Pump(900);
 
             // ---------- 5. 按钮清晰度：模板中不再使用 Effect ----------
             bool noEffectOnBigBtn = win.BigButtonsHaveNoEffectForTest();
