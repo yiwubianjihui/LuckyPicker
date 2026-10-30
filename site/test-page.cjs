@@ -9,19 +9,19 @@ let pass = 0, fail = 0;
 function check(name, ok) { console.log((ok ? 'PASS  ' : 'FAIL  ') + name); ok ? pass++ : fail++; }
 
 check('page title', doc.title.includes('YBH幸运摇人器'));
-check('current version', doc.querySelector('.ver')?.textContent.includes('1.2+21'));
+check('current version', doc.querySelector('.ver')?.textContent.includes('1.2.1+23'));
 const mainDownload = doc.querySelector('a.dl-main');
-check('main Windows download', mainDownload?.getAttribute('href') === 'download/LuckyPicker-win-setup-1.2+build21.exe');
+check('main Windows download', mainDownload?.getAttribute('href') === 'download/LuckyPicker-win-setup-1.2.1+build23.exe');
 check('download options rendered', doc.querySelectorAll('.more-body .opt').length === 7);
 const optionLinks = [...doc.querySelectorAll('.more-body a.go')].map(a => a.getAttribute('href'));
-check('WPF portable link', optionLinks.includes('download/LuckyPicker-win-wpf-1.2+build21.zip'));
+check('WPF portable link', optionLinks.includes('download/LuckyPicker-win-wpf-1.2.1+build23.zip'));
 check('Android link', optionLinks.some(href => href?.endsWith('.apk')));
 check('Linux link', optionLinks.some(href => href?.endsWith('.zip') && href.includes('linux')));
 check('Web link', optionLinks.includes('web/'));
 const githubLinks = [...doc.querySelectorAll('a[href*="github.com"]')].map(a => a.href);
 check('GitHub links use project repository', githubLinks.length >= 4 && githubLinks.every(href => href.startsWith('https://github.com/Yibianhui/LuckyPicker')));
 check('SHA-256 format', /^[0-9A-F]{64}$/.test(doc.getElementById('sha')?.textContent.trim() || ''));
-check('latest changelog entry', doc.querySelector('.tl .ev b')?.textContent.includes('1.2+21'));
+check('latest changelog entry', doc.querySelector('.tl .ev b')?.textContent.includes('1.2.1+23'));
 
 console.log('----');
 console.log(fail === 0 ? 'ALL PASS (' + pass + ')' : fail + ' FAILURES of ' + (pass + fail));

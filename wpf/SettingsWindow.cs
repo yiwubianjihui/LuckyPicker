@@ -2,7 +2,7 @@
 // SettingsWindow.cs — 统一设置窗口
 //
 // 左侧分类导航（圆角选中态）+ 右侧内容区，类似 Windows 11 设置面板。
-// 名单管理为**内嵌**编辑器（不弹独立窗口）；关闭窗口时一并关闭其子窗口。
+// 名单管理与抽选记录由主界面顶部按钮独立打开，设置内不再保留重复入口。
 // ================================================================
 using System;
 using System.Collections.Generic;
@@ -24,9 +24,6 @@ namespace LuckyPickerWpf
         // -------- 宿主回调 --------
         readonly Action applyVoice;                        // 语音引擎/音色变化 → 重建 TTS
         readonly Action ballChanged;                       // 悬浮球相关配置变化 → 立即应用
-        readonly Action rosterSaved;                       // 名单写入后 → 主窗刷新
-        readonly Func<string, DataFile?> parseRoster;      // 解析导入文件
-        readonly Action<List<string>> askPrefetch;         // 询问/执行语音缓存预生成
         readonly Action<UpdateResult> showUpdateDownload;  // 下载安装器（Owner = 本窗口）
         readonly Action<string> speak;                     // 试听（用主窗 TTS 引擎）
         readonly Action onChangeDefaultClass;
@@ -41,36 +38,25 @@ namespace LuckyPickerWpf
         CheckBox chkAutoStart, chkBallVisible, chkBallPinned;
         bool loading = true;
         int currentPage;
-        const int IDX_GENERAL = 0, IDX_VOICE = 1, IDX_ROSTER = 2, IDX_HISTORY = 3, IDX_ABOUT = 4;
+        const int IDX_GENERAL = 0, IDX_VOICE = 1, IDX_ABOUT = 2;
         readonly List<StackPanel> pages = new();
-
-        // -------- 名单页 --------
-        ObservableCollection<Student> rosterRows = new();
-        DataGrid rosterGrid;
-        TextBlock rosterStatus;
 
         // -------- 常规页：悬浮球大小单选组 / 配色卡片 --------
         readonly List<RadioButton> sizeRadios = new();
         readonly List<RadioButton> themeCards = new();
         Border? ballPreview;
 
-        // -------- 记录 / 关于 --------
-        ListBox historyList;
-        TextBlock historyEmpty;
+        // -------- 关于 --------
         TextBlock updateResultText;
 
         public SettingsWindow(Window owner,
-            Action applyVoice, Action ballChanged, Action rosterSaved,
-            Func<string, DataFile?> parseRoster, Action<List<string>> askPrefetch,
+            Action applyVoice, Action ballChanged,
             Action<UpdateResult> showUpdateDownload, Action<string> speak,
             Action changeDefaultClass, Action onQuit, Action themeChanged)
         {
             this.themeChanged = themeChanged;
             this.applyVoice = applyVoice;
             this.ballChanged = ballChanged;
-            this.rosterSaved = rosterSaved;
-            this.parseRoster = parseRoster;
-            this.askPrefetch = askPrefetch;
             this.showUpdateDownload = showUpdateDownload;
             this.speak = speak;
             onChangeDefaultClass = changeDefaultClass;
@@ -170,7 +156,7 @@ namespace LuckyPickerWpf
                 ItemContainerStyle = BuildNavItemStyle()
             };
 
-            string[] titles = { "常规", "语音", "名单管理", "抽选记录", "关于 · 更新" };
+            string[] titles = { "常规", "语音", "关于 · 更新" };
             for (int i = 0; i < titles.Length; i++)
             {
                 var item = new TreeViewItem { Header = titles[i], Tag = i };
@@ -227,7 +213,7 @@ namespace LuckyPickerWpf
         void BuildAllPages(Grid parent)
         {
             pageHost = new Grid();
-            for (int i = 0; i < 5; i++)
+            for (int i = 0; i < 3; i++)
             {
                 var page = new StackPanel { Margin = new Thickness(30, 26, 30, 18) };
                 pages.Add(page);
@@ -242,8 +228,6 @@ namespace LuckyPickerWpf
             }
             FillGeneralPage(pages[IDX_GENERAL]);
             FillVoicePage(pages[IDX_VOICE]);
-            FillRosterPage(pages[IDX_ROSTER]);
-            FillHistoryPage(pages[IDX_HISTORY]);
             FillAboutPage(pages[IDX_ABOUT]);
 
             Grid.SetRow(pageHost, 0);
@@ -260,8 +244,6 @@ namespace LuckyPickerWpf
         {
             "设置改动即时生效并已保存",
             "点「试听」预览音色，点「保存」立即生效",
-            "修改后点「保存名单」写入本机配置",
-            "抽选记录仅保存在本机",
             "检查更新不会改动当前设置",
         };
 
@@ -275,7 +257,6 @@ namespace LuckyPickerWpf
                 statusText.Text = PageHints[idx];
         }
 
-        internal void ShowHistory() => ShowPageForTest(IDX_HISTORY);
         internal void ShowPageAt(int idx) => ShowPageForTest(idx);
 
         // ==================== 常规 ====================
@@ -581,10 +562,6 @@ namespace LuckyPickerWpf
             sizeRadios.Clear();
             themeCards.Clear();
             ballPreview = null;
-            rosterGrid = null;
-            rosterStatus = null;
-            historyList = null;
-            historyEmpty = null;
             updateResultText = null;
             defaultClassCombo = null;
             chkAutoStart = null;
@@ -659,226 +636,6 @@ namespace LuckyPickerWpf
                 FontSize = 11, Foreground = new SolidColorBrush(ThemeManager.Current.Sub),
                 Margin = new Thickness(0, 14, 0, 0), TextWrapping = TextWrapping.Wrap
             });
-        }
-
-        // ==================== 名单（内嵌编辑器） ====================
-
-        void FillRosterPage(StackPanel sp)
-        {
-            sp.Children.Add(MakeSectionTitle("名单管理"));
-            sp.Children.Add(MakeHint("直接在下表中增删改，点「保存名单」写入本机。双击单元格编辑；最后一行可新增。"));
-
-            rosterRows = new ObservableCollection<Student>(
-                App.Core.allStudents.Select(x => new Student { name = x.name, classId = x.classId, gender = x.gender }));
-
-            rosterGrid = new DataGrid
-            {
-                AutoGenerateColumns = false, CanUserAddRows = true, CanUserDeleteRows = true,
-                ItemsSource = rosterRows,
-                HeadersVisibility = DataGridHeadersVisibility.Column, RowHeaderWidth = 0,
-                Height = 250, FontSize = 13, RowHeight = 32,
-                GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
-                HorizontalGridLinesBrush = new SolidColorBrush(ThemeManager.Current.Canvas),
-                Background = new SolidColorBrush(ThemeManager.Current.Surface), BorderBrush = new SolidColorBrush(ThemeManager.Current.Stroke),
-                BorderThickness = new Thickness(1),
-                RowBackground = new SolidColorBrush(ThemeManager.Current.Surface),
-                AlternatingRowBackground = new SolidColorBrush(ThemeManager.Current.SurfaceMuted),
-                UseLayoutRounding = true,
-                Margin = new Thickness(0, 10, 0, 8)
-            };
-            rosterGrid.Columns.Add(new DataGridTextColumn
-            {
-                Header = "姓名",
-                Binding = new System.Windows.Data.Binding("name"),
-                Width = new DataGridLength(1, DataGridLengthUnitType.Star)
-            });
-            var classCol = new DataGridComboBoxColumn
-            {
-                Header = "班级",
-                SelectedValueBinding = new System.Windows.Data.Binding("classId"),
-                SelectedValuePath = "Key", DisplayMemberPath = "Value",
-                Width = new DataGridLength(170)
-            };
-            classCol.ItemsSource = App.Core.classIds
-                .Select(id => new KeyValuePair<string, string>(id, App.Core.ClassName(id))).ToList();
-            rosterGrid.Columns.Add(classCol);
-            var genderCol = new DataGridComboBoxColumn
-            {
-                Header = "性别",
-                SelectedValueBinding = new System.Windows.Data.Binding("gender"),
-                SelectedValuePath = "Key", DisplayMemberPath = "Value",
-                Width = new DataGridLength(90)
-            };
-            genderCol.ItemsSource = new List<KeyValuePair<string, string>>
-            {
-                new KeyValuePair<string, string>("", "不限"),
-                new KeyValuePair<string, string>("male", "男"),
-                new KeyValuePair<string, string>("female", "女")
-            };
-            rosterGrid.Columns.Add(genderCol);
-            sp.Children.Add(rosterGrid);
-
-            var editRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-            var btnAdd = new Button { Content = "添加一行", Width = 104, Margin = new Thickness(0, 0, 8, 0), Style = (Style)FindResource("ModernBtnGhost") };
-            btnAdd.Click += (s, e) =>
-            {
-                rosterRows.Add(new Student { name = "", classId = App.Core.currentClassId, gender = "" });
-                rosterGrid.SelectedIndex = rosterRows.Count - 1;
-                rosterGrid.ScrollIntoView(rosterGrid.SelectedItem);
-            };
-            var btnDel = new Button { Content = "删除选中行", Width = 110, Margin = new Thickness(0, 0, 8, 0), Style = (Style)FindResource("ModernBtnGhost") };
-            btnDel.Click += (s, e) =>
-            {
-                if (rosterGrid.SelectedItem is Student st) rosterRows.Remove(st);
-                else SetRosterStatus("请先选中一行再删除。", true);
-            };
-            var btnReload = new Button { Content = "放弃修改并重载", Width = 140, Style = (Style)FindResource("ModernBtnGhost") };
-            btnReload.Click += (s, e) => { ReloadRosterRows(); SetRosterStatus("已从磁盘重新载入名单。"); };
-            editRow.Children.Add(btnAdd); editRow.Children.Add(btnDel); editRow.Children.Add(btnReload);
-            sp.Children.Add(editRow);
-
-            var fileRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-            var btnSave = new Button { Content = "保存名单", Width = 110, Margin = new Thickness(0, 0, 8, 0), Style = (Style)FindResource("ModernBtn") };
-            var btnImport = new Button { Content = "导入 Excel / CSV / JSON", Width = 180, Margin = new Thickness(0, 0, 8, 0), Style = (Style)FindResource("ModernBtnGhost") };
-            var btnExport = new Button { Content = "导出备份", Width = 104, Margin = new Thickness(0, 0, 8, 0), Style = (Style)FindResource("ModernBtnGhost") };
-            var btnDir = new Button { Content = "打开文件夹", Width = 110, Style = (Style)FindResource("ModernBtnGhost") };
-            btnSave.Click += (s, e) => SaveRosterInline();
-            btnImport.Click += (s, e) => ImportRosterInline();
-            btnExport.Click += (s, e) => ExportRosterInline();
-            btnDir.Click += (s, e) =>
-            {
-                try { Directory.CreateDirectory(LuckyCore.DataDir()); System.Diagnostics.Process.Start("explorer.exe", LuckyCore.DataDir()); }
-                catch { }
-            };
-            fileRow.Children.Add(btnSave); fileRow.Children.Add(btnImport);
-            fileRow.Children.Add(btnExport); fileRow.Children.Add(btnDir);
-            sp.Children.Add(fileRow);
-
-            rosterStatus = new TextBlock
-            {
-                FontSize = 12, TextWrapping = TextWrapping.Wrap,
-                Foreground = new SolidColorBrush(ThemeManager.Current.AccentInk),
-                Margin = new Thickness(0, 2, 0, 0)
-            };
-            sp.Children.Add(rosterStatus);
-            SetRosterStatus("数据文件：" + LuckyCore.DataPath() + "（共 " + rosterRows.Count + " 名学生）");
-        }
-
-        void SetRosterStatus(string msg, bool err = false)
-        {
-            if (rosterStatus == null) return;
-            rosterStatus.Text = msg;
-            rosterStatus.Foreground = new SolidColorBrush(err ? Color.FromRgb(220, 38, 38) : ThemeManager.Current.AccentInk);
-        }
-
-        void ReloadRosterRows()
-        {
-            rosterRows.Clear();
-            foreach (var s in App.Core.allStudents)
-                rosterRows.Add(new Student { name = s.name, classId = s.classId, gender = s.gender });
-        }
-
-        void SaveRosterInline()
-        {
-            try
-            {
-                var list = rosterRows.Where(x => !string.IsNullOrWhiteSpace(x.name)).ToList();
-                var classes = new Dictionary<string, string>(App.Core.classNames);
-                foreach (var s in list)
-                    if (!classes.ContainsKey(s.classId)) classes[s.classId] = s.classId + "班";
-                LuckyCore.SaveDataFile(new DataFile { classes = classes, students = list });
-                rosterSaved?.Invoke();
-                SetRosterStatus("✓ 已保存 " + list.Count + " 名学生到 " + LuckyCore.DataPath());
-                statusText.Text = "✓ 名单已保存（" + list.Count + " 名学生）";
-            }
-            catch (Exception ex) { SetRosterStatus("保存失败：" + ex.Message, true); }
-        }
-
-        void ImportRosterInline()
-        {
-            var ofd = new Microsoft.Win32.OpenFileDialog
-            {
-                Filter = "名单文件|*.xlsx;*.csv;*.json|Excel|*.xlsx|CSV|*.csv|JSON 备份|*.json"
-            };
-            if (ofd.ShowDialog(this) != true) return;
-            try
-            {
-                var data = parseRoster?.Invoke(ofd.FileName);
-                if (data == null || data.students.Count == 0)
-                {
-                    SetRosterStatus("未解析出学生，请检查文件格式（需含「姓名」列）。", true);
-                    return;
-                }
-                LuckyCore.SaveDataFile(new DataFile { classes = data.classes, students = data.students });
-                rosterSaved?.Invoke();
-                ReloadRosterRows();
-                SetRosterStatus("✓ 已导入 " + data.students.Count + " 名学生并保存。");
-                statusText.Text = "✓ 已导入 " + data.students.Count + " 名学生";
-                askPrefetch?.Invoke(data.students.Select(x => x.name).Distinct().ToList());
-            }
-            catch (Exception ex) { SetRosterStatus("导入失败：" + ex.Message, true); }
-        }
-
-        void ExportRosterInline()
-        {
-            try
-            {
-                string dst = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                    "LuckyPicker名单备份_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".json");
-                Directory.CreateDirectory(LuckyCore.DataDir());
-                File.Copy(LuckyCore.DataPath(), dst, true);
-                SetRosterStatus("已导出到：" + dst);
-            }
-            catch (Exception ex) { SetRosterStatus("导出失败：" + ex.Message, true); }
-        }
-
-        // ==================== 抽选记录 ====================
-
-        void FillHistoryPage(StackPanel sp)
-        {
-            sp.Children.Add(MakeSectionTitle("抽选记录"));
-            sp.Children.Add(MakeHint("最近 200 条抽取记录（含时间与结果）。"));
-
-            historyList = new ListBox
-            {
-                FontSize = 12, Height = 300, Margin = new Thickness(0, 10, 0, 10),
-                BorderBrush = new SolidColorBrush(ThemeManager.Current.Stroke),
-                BorderThickness = new Thickness(1),
-                UseLayoutRounding = true
-            };
-            ReloadHistory();
-            sp.Children.Add(historyList);
-
-            historyEmpty = new TextBlock
-            {
-                FontSize = 11.5, Foreground = new SolidColorBrush(ThemeManager.Current.Sub),
-                Margin = new Thickness(0, 0, 0, 10)
-            };
-            sp.Children.Add(historyEmpty);
-
-            var row = new StackPanel { Orientation = Orientation.Horizontal };
-            var btnReload = new Button { Content = "刷新", Width = 96, Margin = new Thickness(0, 0, 10, 0), Style = (Style)FindResource("ModernBtnGhost") };
-            btnReload.Click += (s, e) => { ReloadHistory(); statusText.Text = "记录已刷新"; };
-            var btnClear = new Button { Content = "清空记录", Width = 110, Style = (Style)FindResource("ModernBtnGhost") };
-            btnClear.Click += (s, e) => { HistoryStore.Clear(); ReloadHistory(); statusText.Text = "✓ 已清空抽选记录"; };
-            row.Children.Add(btnReload); row.Children.Add(btnClear);
-            sp.Children.Add(row);
-        }
-
-        void ReloadHistory()
-        {
-            if (historyList == null) return;
-            var items = HistoryStore.Load().Select(h => h.time + "  " + h.text).ToList();
-            if (items.Count == 0)
-            {
-                historyList.ItemsSource = new List<string> { "（暂无记录）" };
-                if (historyEmpty != null) historyEmpty.Text = "共 0 条记录";
-            }
-            else
-            {
-                historyList.ItemsSource = items;
-                if (historyEmpty != null) historyEmpty.Text = "共 " + items.Count + " 条记录（仅展示最近 200 条）";
-            }
         }
 
         // ==================== 关于 · 更新 ====================
@@ -985,20 +742,8 @@ namespace LuckyPickerWpf
             try { if (idx >= 0 && idx < treeNav.Items.Count) ((TreeViewItem)treeNav.Items[idx]).IsSelected = true; } catch { }
             ShowPage(idx);
         }
-        internal bool HasInlineRosterForTest
-        {
-            get
-            {
-                if (rosterGrid == null) return false;
-                DependencyObject? d = rosterGrid;
-                while (d != null)
-                {
-                    if (ReferenceEquals(d, this)) return true;
-                    d = LogicalTreeHelper.GetParent(d) ?? VisualTreeHelper.GetParent(d);
-                }
-                return false;
-            }
-        }
+        internal bool HasNavTitleForTest(string title)
+            => treeNav != null && treeNav.Items.OfType<TreeViewItem>().Any(t => string.Equals(t.Header as string, title));
 
         /// <summary>真实运行时断言：左栏第一项模板里的 "Bd" Border 是否带圆角。</summary>
         internal bool NavRoundedForTest

@@ -6,8 +6,8 @@
 //   返回 UTF-8 JSON：
 //   {
 //     "product":  "YBH幸运摇人器",
-//     "version":  "1.2+21",            // 必填，展示给用户
-//     "build":    19,                   // 可选，建议填写，用于精确比较
+//     "version":  "1.2.1+23",          // 必填，展示给用户
+//     "build":    23,                   // 可选，建议填写，用于精确比较
 //     "channel":  "1.1",                // 可选
 //     "url":      "https://你的网站/download.zip",  // 可选，新版本下载页
 //     "notes":    "1.新增...\n2.修复...",            // 可选，更新说明
@@ -36,9 +36,9 @@ namespace LuckyPickerWpf
     public static class AppVersion
     {
         public const string ProductName = "YBH幸运摇人器";
-        public const string Display = "1.2+21";
+        public const string Display = "1.2.1+23";
         public const string Channel = "1.2";
-        public const int Build = 21;
+        public const int Build = 23;
         public const string UpdateUrlDefault = "https://lr.yibianhui.cn/update.json";
         // 备用接口：主接口失效时自动回退尝试（镜像站 / 历史地址）
         public const string UpdateUrlLegacy = "https://app.yibianhui.cn/luckypicker/update.json";
@@ -443,7 +443,7 @@ namespace LuckyPickerWpf
             return Uri.TryCreate(normalized, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps ? normalized : "";
         }
 
-        // 从 "1.2+21" 这类字符串中提取最后一个整数（Build 号）。
+        // 从 "1.2.1+23" 这类字符串中提取最后一个整数（Build 号）。
         public static int ExtractLastInt(string text)
         {
             if (string.IsNullOrEmpty(text)) return 0;

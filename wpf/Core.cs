@@ -19,6 +19,7 @@ namespace LuckyPickerWpf
         public string classId { get; set; } = "";
         public string gender { get; set; } = "";   // "" | male | female
         public bool blocked { get; set; } = false; // 屏蔽（临时）
+        public string reading { get; set; } = "";  // 朗读覆盖（同音字），空则按 name 朗读
     }
 
     public class DataFile

@@ -48,7 +48,7 @@ Write-Host '==> aapt2 compile resources'
 & (Join-Path $BT 'aapt2.exe') compile --dir res -o (Join-Path $OUT 'res\res.zip')
 
 Write-Host '==> aapt2 link (base apk)'
-& (Join-Path $BT 'aapt2.exe') link -o (Join-Path $OUT 'base.apk') --manifest AndroidManifest.xml -I $PLATFORM (Join-Path $OUT 'res\res.zip') --min-sdk-version 24 --target-sdk-version 34 --version-code 21 --version-name '1.2+21'
+& (Join-Path $BT 'aapt2.exe') link -o (Join-Path $OUT 'base.apk') --manifest AndroidManifest.xml -I $PLATFORM (Join-Path $OUT 'res\res.zip') --min-sdk-version 24 --target-sdk-version 34 --version-code 23 --version-name '1.2.1+23'
 
 Write-Host '==> javac MainActivity / BootReceiver'
 # 清掉旧 class，避免 javac 失败时沿用陈旧产物

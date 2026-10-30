@@ -8,10 +8,10 @@
     <Nullable>enable</Nullable>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AssemblyTitle>YBH幸运摇人器</AssemblyTitle>
-    <Version>1.2+21</Version>
-    <InformationalVersion>1.2+21</InformationalVersion>
-    <AssemblyVersion>1.2.0.0</AssemblyVersion>
-    <FileVersion>1.2.0.0</FileVersion>
+    <Version>1.2.1+23</Version>
+    <InformationalVersion>1.2.1+23</InformationalVersion>
+    <AssemblyVersion>1.2.1.0</AssemblyVersion>
+    <FileVersion>1.2.1.0</FileVersion>
     <AssemblyName>LuckyPicker</AssemblyName>
     <ApplicationIcon>icon.ico</ApplicationIcon>
     <!-- 运行时设置 DPI 感知（不写 manifest，避免无头/远程会话的 BEX64 崩溃），解决缩放后模糊 -->

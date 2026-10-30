@@ -1,7 +1,7 @@
 # YBH幸运摇人器
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.2%2B21-blue.svg)](docs/CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.2.1%2B23-blue.svg)](docs/CHANGELOG.md)
 [![GitHub](https://img.shields.io/badge/GitHub-Yibianhui%2FLuckyPicker-black.svg)](https://github.com/Yibianhui/LuckyPicker)
 
 多端班级随机摇人工具：**Windows（WPF 重构版为主）+ Android + Linux + Web**。

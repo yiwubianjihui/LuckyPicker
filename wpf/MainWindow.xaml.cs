@@ -85,7 +85,7 @@ namespace LuckyPickerWpf
                 tts = new TtsEngine(s => Dispatcher.Invoke(() => { try { VoiceStatusText.Text = s; } catch { } }));
                 string st = tts.InitStatus();   // 初始化本地 SAPI 兜底（在线失败时保证能出声）
                 VoiceStatusText.Text = st;
-                try { tts.QueueWarmup(GetClassNames()); } catch { }
+                try { tts.QueueWarmup(GetClassSpeechNames()); } catch { }
             }
             catch { }
         }
@@ -129,7 +129,7 @@ namespace LuckyPickerWpf
             var s = core.PickOne();
             if (s == null) { HintText.Text = "※ 当前无候选人（请检查名单 / 屏蔽 / 筛选）"; return; }
             await AnimatePickAsync(s.name);
-            Speak(s.name);
+            Speak(NameReading.Spoken(s));
             AddHistory(new HistoryEntry { time = Now(), text = s.name, classId = core.currentClassId });
             RefreshPoolStats();
         }
@@ -141,7 +141,7 @@ namespace LuckyPickerWpf
             if (list.Count == 0) { HintText.Text = "※ 当前无候选人"; return; }
             var names = list.Select(x => x.name).ToList();
             await ShowMultiAsync(names);
-            tts?.SpeakSequence(names);
+            tts?.SpeakSequence(list.Select(NameReading.Spoken).ToList());
             AddHistory(new HistoryEntry { time = Now(), text = "连抽： " + string.Join("、", names), classId = core.currentClassId });
             RefreshPoolStats();
         }
@@ -220,6 +220,12 @@ namespace LuckyPickerWpf
         List<string> GetClassNames()
         {
             return core.allStudents.Where(s => s.classId == core.currentClassId).Select(s => s.name).ToList();
+        }
+
+        List<string> GetClassSpeechNames()
+        {
+            return core.allStudents.Where(s => s.classId == core.currentClassId)
+                .Select(NameReading.Spoken).Where(n => n.Length > 0).Distinct().ToList();
         }
 
         void Speak(string text)
@@ -370,7 +376,7 @@ namespace LuckyPickerWpf
             tts = new TtsEngine(msg => Dispatcher.Invoke(() => { try { VoiceStatusText.Text = msg; } catch { } }));
             string status = tts.InitStatus();
             VoiceStatusText.Text = status;
-            try { tts.QueueWarmup(GetClassNames()); } catch { }
+            try { tts.QueueWarmup(GetClassSpeechNames()); } catch { }
         }
 
         // ---------------- 快捷键（与经典版对齐） ----------------
@@ -402,7 +408,7 @@ namespace LuckyPickerWpf
             else if (e.Key == Key.H && mod == ModifierKeys.Control)
             {
                 e.Handled = true;
-                OpenSettings(true);
+                ShowHistoryDialog();
             }
             else if (e.Key == Key.U && mod == ModifierKeys.Control)
             {
@@ -413,12 +419,16 @@ namespace LuckyPickerWpf
             {
                 e.Handled = true;
                 string last = PickedName.Text;
-                if (!string.IsNullOrEmpty(last) && last != "——") Speak(last);
+                if (!string.IsNullOrEmpty(last) && last != "——")
+                {
+                    var student = core.allStudents.FirstOrDefault(x => x.name == last && x.classId == core.currentClassId);
+                    Speak(student == null ? last : NameReading.Spoken(student));
+                }
             }
         }
 
         void OnMenuEditor(object sender, RoutedEventArgs e) => ShowEditorDialog();
-        void OnMenuHistory(object sender, RoutedEventArgs e) => OpenSettings(true);
+        void OnMenuHistory(object sender, RoutedEventArgs e) => ShowHistoryDialog();
         void OnMenuAbout(object sender, RoutedEventArgs e) => ShowAboutDialog();
 
 
@@ -477,7 +487,7 @@ namespace LuckyPickerWpf
             if (picked == null) { HintText.Text = "※ 当前无候选人"; return; }
             ball?.ShowPicked(picked.name);
             ball?.AutoHideAfterPick();
-            Speak(picked.name);
+            Speak(NameReading.Spoken(picked));
             AddHistory(new HistoryEntry { time = Now(), text = picked.name, classId = core.currentClassId });
             RefreshPoolStats();
         }
@@ -490,7 +500,7 @@ namespace LuckyPickerWpf
             var names = list.Select(x => x.name).ToList();
             ball?.ShowPicked(list.Count + "人");
             ball?.AutoHideAfterPick();
-            tts?.SpeakSequence(names);
+            tts?.SpeakSequence(list.Select(NameReading.Spoken).ToList());
             AddHistory(new HistoryEntry { time = Now(), text = "连抽： " + string.Join("、", names), classId = core.currentClassId });
             RefreshPoolStats();
         }
@@ -516,28 +526,36 @@ namespace LuckyPickerWpf
 
         // ---------- 设置窗口（统一设置） ----------
         SettingsWindow? settingsWin;
-        const int SettingsRosterPage = 2;
-        const int SettingsHistoryPage = 3;
+        HistoryWindow? historyWin;
+        DataGrid? rosterEditorGrid;
+        Button? rosterEditorReadingButton;
         void OnSettingsClick(object sender, RoutedEventArgs e) => OpenSettings();
-        void OnRosterClick(object sender, RoutedEventArgs e) => OpenSettingsAt(SettingsRosterPage);
-        void OnHistoryClick(object sender, RoutedEventArgs e) => OpenSettingsAt(SettingsHistoryPage);
+        void OnRosterClick(object sender, RoutedEventArgs e) => ShowEditorDialog();
+        void OnHistoryClick(object sender, RoutedEventArgs e) => ShowHistoryDialog();
 
-        void OpenSettings(bool history = false) => OpenSettingsAt(history ? SettingsHistoryPage : -1);
+        void ShowHistoryDialog()
+        {
+            if (historyWin != null && historyWin.IsLoaded)
+            {
+                historyWin.ReloadHistory();
+                historyWin.Activate();
+                return;
+            }
+            historyWin = new HistoryWindow(this);
+            historyWin.Closed += (s, e) => historyWin = null;
+            historyWin.Show();
+        }
 
-        void OpenSettingsAt(int page)
+        void OpenSettings()
         {
             if (settingsWin != null && settingsWin.IsLoaded)
             {
-                if (page >= 0) settingsWin.ShowPageAt(page);
                 settingsWin.Activate();
                 return;
             }
             settingsWin = new SettingsWindow(this,
                 applyVoice: ApplyVoicePublic,
                 ballChanged: ApplyBallSettings,
-                rosterSaved: ReloadRosterFromDisk,
-                parseRoster: ParseRosterFile,
-                askPrefetch: names => ShowPrefetchDialog(names, settingsWin, modal: false),
                 showUpdateDownload: res => ShowUpdateDownload(res, settingsWin, modal: false),
                 speak: text => { try { Speak(text); } catch { } },
                 changeDefaultClass: () => { AppConfig.DefaultClassId = ""; AppConfig.Save(); classChosen = false; ShowClassMini(); },
@@ -545,7 +563,6 @@ namespace LuckyPickerWpf
                 themeChanged: ApplyTheme);
             settingsWin.Closed += (s, e) => settingsWin = null;
             settingsWin.Show();
-            if (page >= 0) settingsWin.ShowPageAt(page);
         }
 
         /// <summary>把悬浮球相关的配置一次性应用到球上（设置窗口调用，立即生效 + 已随 AppConfig.Save 持久化）。</summary>
@@ -575,22 +592,6 @@ namespace LuckyPickerWpf
             try { ball?.ApplyTheme(); } catch { }
         }
 
-        /// <summary>名单保存/导入后刷新主窗口（设置窗口内嵌编辑器调用）。</summary>
-        public void ReloadRosterFromDisk()
-        {
-            try
-            {
-                core.Reload();
-                InitCore();
-                classChosen = !string.IsNullOrEmpty(AppConfig.DefaultClassId) && core.classIds.Contains(AppConfig.DefaultClassId);
-                HintText.Text = "√ 名单已更新（" + core.allStudents.Count + " 名学生）";
-            }
-            catch (Exception ex) { App.Log("ROSTER-RELOAD-EX: " + ex); }
-        }
-
-        /// <summary>供设置窗口内嵌导入使用的解析入口。</summary>
-        public static DataFile? ParseRosterFile(string path) => ParseRoster(path);
-
         /// <summary>设置窗口语音保存：重建 TTS 引擎使新引擎/音色立即生效。</summary>
         public void ApplyVoicePublic()
         {
@@ -598,7 +599,7 @@ namespace LuckyPickerWpf
             tts = new TtsEngine(msg => Dispatcher.Invoke(() => { try { VoiceStatusText.Text = msg; } catch { } }));
             string status = tts.InitStatus();
             VoiceStatusText.Text = status;
-            try { tts.QueueWarmup(GetClassNames()); } catch { }
+            try { tts.QueueWarmup(GetClassSpeechNames()); } catch { }
         }
 
         // ---------- 默认班级 ----------
@@ -832,7 +833,9 @@ namespace LuckyPickerWpf
 
         // ---------- 名单管理对话框 ----------
         // ---------------- 名单编辑（表格直接增删改） ----------------
-        void ShowRosterEditor()
+        void ShowRosterEditor() => BuildRosterEditor().ShowDialog();
+
+        Window BuildRosterEditor()
         {
             var t = ThemeManager.Current;
             var dlg = new Window
@@ -847,7 +850,7 @@ namespace LuckyPickerWpf
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var rows = new ObservableCollection<Student>(
-                core.allStudents.Select(x => new Student { name = x.name, classId = x.classId, gender = x.gender }));
+                core.allStudents.Select(x => new Student { name = x.name, classId = x.classId, gender = x.gender, reading = x.reading }));
 
             var grid = new DataGrid
             {
@@ -862,6 +865,7 @@ namespace LuckyPickerWpf
                 AlternatingRowBackground = new SolidColorBrush(t.SurfaceMuted),
                 UseLayoutRounding = true, SnapsToDevicePixels = true
             };
+            rosterEditorGrid = grid;
             grid.Columns.Add(new DataGridTextColumn
             {
                 Header = "姓名",
@@ -892,12 +896,18 @@ namespace LuckyPickerWpf
                 new KeyValuePair<string, string>("female", "女")
             };
             grid.Columns.Add(genderCol);
+            grid.Columns.Add(new DataGridTextColumn
+            {
+                Header = "读音",
+                Binding = new System.Windows.Data.Binding("reading"),
+                Width = new DataGridLength(130)
+            });
             Grid.SetRow(grid, 0);
             root.Children.Add(grid);
 
             var tip = new TextBlock
             {
-                Text = "双击单元格直接修改；最后一行为新增行；选中行后按 Delete 或点「删除选中行」移除。",
+                Text = "双击单元格直接修改；「读音」列填同音字可纠正多音字朗读（如 曾→增），选中行可点「设置读音」选择。",
                 FontSize = 11.5, TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(t.Sub),
                 Margin = new Thickness(0, 0, 0, 10)
@@ -908,18 +918,28 @@ namespace LuckyPickerWpf
             var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
             var modernGhost2 = (Style)FindResource("ModernBtnGhost");
             var modernMain2 = (Style)FindResource("ModernBtn");
+            var bReading = new Button { Content = "设置读音…", Width = 104, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = modernGhost2 };
+            rosterEditorReadingButton = bReading;
             var bDel = new Button { Content = "删除选中行", Width = 110, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = modernGhost2 };
             var bSave = new Button { Content = "保存", Width = 90, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = modernMain2 };
             var bCancel = new Button { Content = "取消", Width = 90, Height = 36, Cursor = Cursors.Hand, Style = modernGhost2 };
+            bReading.Click += (s, e) =>
+            {
+                if (grid.SelectedItem is not Student st) return;
+                string? reading = ReadingDialog.Show(dlg, st.name ?? "", st.reading ?? "", text => Speak(text));
+                if (reading == null) return;
+                st.reading = reading;
+                grid.Items.Refresh();
+            };
             bDel.Click += (s, e) => { if (grid.SelectedItem is Student st) rows.Remove(st); };
             bSave.Click += (s, e) => { SaveRoster(rows); dlg.Close(); };
             bCancel.Click += (s, e) => dlg.Close();
-            btns.Children.Add(bDel); btns.Children.Add(bSave); btns.Children.Add(bCancel);
+            btns.Children.Add(bReading); btns.Children.Add(bDel); btns.Children.Add(bSave); btns.Children.Add(bCancel);
             Grid.SetRow(btns, 2);
             root.Children.Add(btns);
 
             dlg.Content = root;
-            dlg.ShowDialog();
+            return dlg;
         }
 
         void SaveRoster(IEnumerable<Student> rows)
@@ -941,8 +961,14 @@ namespace LuckyPickerWpf
             }
         }
 
+        Window? editorManagerWin;
         void ShowEditorDialog()
         {
+            if (editorManagerWin != null && editorManagerWin.IsLoaded)
+            {
+                editorManagerWin.Activate();
+                return;
+            }
             var t = ThemeManager.Current;
             var dlg = new Window
             {
@@ -987,7 +1013,7 @@ namespace LuckyPickerWpf
                         "预生成语音缓存", MessageBoxButton.YesNo, MessageBoxImage.Question);
                     if (askPrefetch == MessageBoxResult.Yes)
                     {
-                        var names = data.students.Select(x => x.name).Distinct().ToList();
+                        var names = data.students.Select(NameReading.Spoken).Where(n => n.Length > 0).Distinct().ToList();
                         Dispatcher.BeginInvoke(() => ShowPrefetchDialog(names));
                     }
                 }
@@ -1016,7 +1042,9 @@ namespace LuckyPickerWpf
             panel.Children.Add(btnOpenDir);
             panel.Children.Add(status);
             dlg.Content = panel;
-            dlg.ShowDialog();
+            editorManagerWin = dlg;
+            dlg.Closed += (s, e) => editorManagerWin = null;
+            dlg.Show();
         }
 
         // ---------------- 批量预生成语音缓存（进度 + 取消） ----------------
@@ -1279,6 +1307,7 @@ namespace LuckyPickerWpf
             int nameCol = ImportUtil.FindColumn(rows, "name", "姓名", "名字", "学生");
             int classCol = ImportUtil.FindColumn(rows, "classId", "class", "班级", "班");
             int genderCol = ImportUtil.FindColumn(rows, "gender", "性别");
+            int readingCol = ImportUtil.FindColumn(rows, "reading", "读音", "朗读");
             if (nameCol < 0) return null;
             var students = new List<Student>();
             var classes = new Dictionary<string, string>();
@@ -1290,7 +1319,8 @@ namespace LuckyPickerWpf
                 string cid = classCol >= 0 && classCol < r.Count ? ImportUtil.NormalizeClass(r[classCol]) : "1";
                 if (cid.Length == 0) cid = "1";
                 string g = genderCol >= 0 && genderCol < r.Count ? ImportUtil.NormalizeGender(r[genderCol]) : "";
-                students.Add(new Student { name = name, classId = cid, gender = g });
+                string reading = readingCol >= 0 && readingCol < r.Count ? r[readingCol].Trim() : "";
+                students.Add(new Student { name = name, classId = cid, gender = g, reading = reading });
                 if (!classes.ContainsKey(cid)) classes[cid] = cid + "班";
             }
             return new DataFile { classes = classes, students = students };
@@ -1414,20 +1444,16 @@ namespace LuckyPickerWpf
             PumpFrames(400);
         }
         internal int SettingsPageCountForTest(SettingsWindow sw) => sw.PageCountForTest;
-        internal void SettingsShowPageForTest(SettingsWindow sw, int idx) { sw.ShowPageForTest(idx); PumpFrames(300); }
-        internal bool SettingsHasInlineRosterForTest(SettingsWindow sw) => sw.HasInlineRosterForTest;
-        internal bool SettingsHasInlineRosterForTestAfterShow(SettingsWindow sw)
-        {
-            sw.ShowPageForTest(2);        // 名单管理
-            PumpFrames(400);
-            bool ok = sw.HasInlineRosterForTest;
-            sw.ShowPageForTest(0);
-            PumpFrames(250);
-            return ok;
-        }
+        internal bool SettingsHasNavTitleForTest(SettingsWindow sw, string title) => sw.HasNavTitleForTest(title);
         internal bool SettingsNavRoundedForTest(SettingsWindow sw) => sw.NavRoundedForTest;
-        internal void OpenHistoryForTest() { OpenSettings(true); PumpFrames(300); }
-        internal int SettingsCurrentPageForTest(SettingsWindow sw) => sw.CurrentPageForTest;
+        internal void OpenHistoryForTest() { ShowHistoryDialog(); PumpFrames(300); }
+        internal HistoryWindow? HistoryWindowForTest => historyWin;
+        internal Window? EditorManagerForTest => editorManagerWin;
+        internal Window BuildRosterEditorForTest() => BuildRosterEditor();
+        internal bool RosterEditorHasReadingUiForTest =>
+            rosterEditorGrid != null
+            && rosterEditorGrid.Columns.Any(c => string.Equals(c.Header as string, "读音"))
+            && rosterEditorReadingButton != null;
         internal int SettingsBallSizeCheckedCountForTest(SettingsWindow sw) => sw.BallSizeCheckedCountForTest;
         internal double SettingsBallPreviewDiameterForTest(SettingsWindow sw) => sw.BallPreviewDiameterForTest;
         internal string SettingsStatusTextForTest(SettingsWindow sw) => sw.StatusTextForTest;

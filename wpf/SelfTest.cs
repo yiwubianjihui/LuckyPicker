@@ -88,6 +88,19 @@ namespace LuckyPickerWpf
             core.SetGender("female");
             A("核心：中文女性数据自动规范化", core.GetCandidates().Count == 1 && core.GetCandidates()[0].name == "乙");
             A("核心：导入性别格式统一", ImportUtil.NormalizeGender("男生") == "male" && ImportUtil.NormalizeGender("女") == "female");
+            A("读音：多音字候选与同音字改写", NameReading.SelfTest(out string readingDetail), readingDetail);
+            try
+            {
+                string readingJson = System.Text.Json.JsonSerializer.Serialize(new DataFile
+                {
+                    students = new List<Student> { new() { name = "曾小乐", classId = "1", reading = "增小月" } }
+                });
+                var readingBack = System.Text.Json.JsonSerializer.Deserialize<DataFile>(readingJson);
+                A("读音：随名单 JSON 保存与读取", readingBack?.students.Count == 1
+                  && readingBack.students[0].reading == "增小月"
+                  && NameReading.Spoken(readingBack.students[0]) == "增小月");
+            }
+            catch (Exception ex) { A("读音：随名单 JSON 保存与读取", false, ex.Message); }
 
             core.SetGender("all");
             var picked = core.PickMulti(3);
@@ -105,10 +118,10 @@ namespace LuckyPickerWpf
             catch (Exception ex) { A("核心：JSON 原子写入与替换", false, ex.Message); }
             finally { try { File.Delete(temp); } catch { } }
 
-            A("版本：1.2+21 可提取构建号", UpdateManager.ExtractLastInt("1.2+21") == 21);
+            A("版本：1.2.1+23 可提取构建号", UpdateManager.ExtractLastInt("1.2.1+23") == 23);
             A("版本：构建号与显示版本一致", AppVersion.Build == UpdateManager.ExtractLastInt(AppVersion.Display),
               "Build=" + AppVersion.Build + " Display=" + AppVersion.Display);
-            var update = UpdateManager.ParseJson("{\"version\":\"1.2+22\",\"build\":22,\"setupUrl\":\"https://example.com/setup.exe\",\"setupSha256\":\"ABC123\"}");
+            var update = UpdateManager.ParseJson("{\"version\":\"9.9.9+999\",\"build\":999,\"setupUrl\":\"https://example.com/setup.exe\",\"setupSha256\":\"ABC123\"}");
             A("更新：解析安装直链与 SHA-256", update.Success && update.HasUpdate && update.SetupUrl == "https://example.com/setup.exe" && update.SetupSha256 == "abc123");
             A("更新：拒绝 HTTP 下载地址", UpdateManager.ParseJson("{\"version\":\"1.0+19\",\"url\":\"http://example.com/setup.exe\"}").DownloadUrl == "");
             A("更新：拒绝 HTTP 检查接口", !UpdateManager.Check("http://example.com/update.json").Success);
@@ -441,11 +454,17 @@ namespace LuckyPickerWpf
             if (sw != null)
             {
                 int pageCount = win.SettingsPageCountForTest(sw);
-                A("1b 设置窗口 5 个分类页", pageCount == 5, "pages=" + pageCount);
+                A("1b 设置窗口 3 个分类页", pageCount == 3, "pages=" + pageCount);
 
-                bool inlineRoster = win.SettingsHasInlineRosterForTestAfterShow(sw);
-                A("1c 名单编辑为内嵌（DataGrid 在设置窗口内）", inlineRoster,
-                  "切换到名单管理页后，rosterGrid 在设置窗口逻辑/视觉树内");
+                bool noRosterNav = !win.SettingsHasNavTitleForTest(sw, "名单管理");
+                bool noHistoryNav = !win.SettingsHasNavTitleForTest(sw, "抽选记录");
+                A("1c 设置内不再有名单管理/抽选记录入口", noRosterNav && noHistoryNav,
+                  "rosterNav=" + !noRosterNav + " historyNav=" + !noHistoryNav);
+
+                var editor = win.BuildRosterEditorForTest();
+                A("1c2 独立名单编辑器提供读音列与「设置读音」按钮", win.RosterEditorHasReadingUiForTest,
+                  "读音列 + 设置读音…");
+                try { editor.Close(); } catch { }
 
                 // 主窗口截图（in-process，不依赖前台/截屏）
                 string shotRoot = Path.GetDirectoryName(outPath) ?? ".";
@@ -495,7 +514,7 @@ namespace LuckyPickerWpf
                 // 逐页渲染截图（in-process RenderTargetBitmap，不依赖点击/前台）
                 string shotDir = Path.Combine(Path.GetDirectoryName(outPath) ?? ".", "settings_shots");
                 int shots = 0;
-                for (int p = 0; p < 5; p++)
+                for (int p = 0; p < 3; p++)
                 {
                     sw.ShowPageForTest(p);
                     Pump(420);
@@ -503,7 +522,17 @@ namespace LuckyPickerWpf
                 }
                 sw.ShowPageForTest(0);
                 Pump(250);
-                A("截图 设置窗口 5 个分类页", shots == 5, shots + "/5 张 → " + shotDir);
+                A("截图 设置窗口 3 个分类页", shots == 3, shots + "/3 张 → " + shotDir);
+
+                var readingDlg = ReadingDialog.Build(sw, "曾小乐", "增小月", _ => { }, _ => { });
+                readingDlg.Show();
+                Pump(350);
+                bool readingVisible = readingDlg.IsVisible;
+                bool readingShot = SaveShot(readingDlg, Path.Combine(shotRoot, "reading_dialog.png"));
+                readingDlg.Close();
+                Pump(120);
+                A("截图 读音设置对话框（示例姓名）", readingVisible && readingShot,
+                  Path.Combine(shotRoot, "reading_dialog.png"));
 
                 // ---------- 11. 配色主题：切换即时生效 + 持久化 + 悬浮球同步 ----------
                 string oldTheme = AppConfig.Theme;
@@ -550,35 +579,46 @@ namespace LuckyPickerWpf
 
                 win.OpenHistoryForTest();
                 Pump(300);
-                A("6a 抽选记录作为设置内独立导航页打开", win.SettingsCurrentPageForTest(sw) == 3,
-                  "page=" + win.SettingsCurrentPageForTest(sw));
-                bool historyChild = Application.Current.Windows.OfType<Window>()
-                    .Any(w => w.Title != null && w.Title == "抽选记录" && w.IsVisible);
-                A("6b 不再弹出重复的抽选记录子窗口", !historyChild, "childWindow=" + historyChild);
+                var hw = win.HistoryWindowForTest;
+                A("6a 抽选记录以独立窗口打开", hw != null && hw.IsVisible && hw.Title == "抽选记录",
+                  hw == null ? "null" : "title=" + hw.Title + " visible=" + hw.IsVisible);
+                A("6b 设置窗口内不再有抽选记录入口", !win.SettingsHasNavTitleForTest(sw, "抽选记录"),
+                  "navHistory=" + win.SettingsHasNavTitleForTest(sw, "抽选记录"));
+                if (hw != null)
+                {
+                    string historyShot = Path.Combine(Path.GetDirectoryName(outPath) ?? ".", "history_window.png");
+                    A("截图 抽选记录窗口", SaveShot(hw, historyShot), historyShot);
+                }
+                hw?.Close();
+                Pump(300);
+                A("6c 记录窗口引用已释放", win.HistoryWindowForTest == null,
+                  "historyWin=" + (win.HistoryWindowForTest == null ? "null" : "非空"));
                 sw.Close();
                 Pump(900);
                 bool settingsGone = win.SettingsWindowForTest == null;
-                A("6c 设置窗口引用已释放", settingsGone, "settingsWin=" + (settingsGone ? "null" : "非空"));
+                A("6d 设置窗口引用已释放", settingsGone, "settingsWin=" + (settingsGone ? "null" : "非空"));
             }
 
-            // ---------- 顶部快捷入口：直达设置对应分类页 ----------
+            // ---------- 顶部快捷入口：打开独立名单 / 记录窗口（不再进入设置） ----------
             win.RosterBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Pump(700);
-            var swRoster = win.SettingsWindowForTest;
-            A("顶部「名单管理」直达设置·名单管理页",
-              swRoster != null && win.SettingsCurrentPageForTest(swRoster) == 2,
-              "page=" + (swRoster == null ? -1 : win.SettingsCurrentPageForTest(swRoster)));
-            swRoster?.Close();
-            Pump(900);
+            var manager = win.EditorManagerForTest;
+            A("顶部「名单管理」打开独立管理窗口", manager != null && manager.IsVisible && manager.Title == "名单管理",
+              manager == null ? "null" : "title=" + manager.Title + " visible=" + manager.IsVisible);
+            manager?.Close();
+            Pump(500);
+            A("顶部「名单管理」不再进入设置窗口", win.SettingsWindowForTest == null,
+              "settingsWin=" + (win.SettingsWindowForTest == null ? "null" : "非空"));
 
             win.HistoryBtn.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Pump(700);
-            var swHistory = win.SettingsWindowForTest;
-            A("顶部「抽取记录」直达设置·抽选记录页",
-              swHistory != null && win.SettingsCurrentPageForTest(swHistory) == 3,
-              "page=" + (swHistory == null ? -1 : win.SettingsCurrentPageForTest(swHistory)));
-            swHistory?.Close();
-            Pump(900);
+            var historyWin = win.HistoryWindowForTest;
+            A("顶部「抽取记录」打开独立记录窗口", historyWin != null && historyWin.IsVisible,
+              historyWin == null ? "null" : "title=" + historyWin.Title);
+            historyWin?.Close();
+            Pump(500);
+            A("顶部「抽取记录」不再进入设置窗口", win.SettingsWindowForTest == null,
+              "settingsWin=" + (win.SettingsWindowForTest == null ? "null" : "非空"));
 
             // ---------- 5. 按钮清晰度：模板中不再使用 Effect ----------
             bool noEffectOnBigBtn = win.BigButtonsHaveNoEffectForTest();
@@ -644,7 +684,7 @@ namespace LuckyPickerWpf
             return -1;
         }
 
-        static string PageName(int i) => new[] { "general", "voice", "roster", "history", "about" }[i];
+        static string PageName(int i) => new[] { "general", "voice", "about" }[i];
 
         /// <summary>把窗口当前内容渲染成 PNG（不依赖窗口在前台）。</summary>
         static bool SaveShot(Window w, string path)
