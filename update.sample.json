@@ -5,8 +5,8 @@
   "channel": "1.2",
   "url": "https://lr.yibianhui.cn/",
   "setupUrl": "https://lr.yibianhui.cn/download/LuckyPicker-win-setup-1.2.1+build23.exe",
-  "setupSha256": "17576d4bc68a7ca8bc952d6a69b00cb17d6ca0fea778b1d24368b4014d16bb4c",
-  "notes": "1. 连抽播报裁掉首尾静音并拼接为单段，名字间静音从约 0.75 秒降至约 0.12 秒。\n2. 支持三套配色切换：鼠尾草绿 / 雾霭蓝 / 墨色极简，设置内即时生效并记忆。",
+  "setupSha256": "0b7fcfcc00febf922930506232c80d6134d463169ddcbcf73374ea5f1911fe45",
+  "notes": "1. 姓名新增「读音」选择：多音字姓名可按同音字纠正朗读，抽选结果与记录仍显示原名。\n2. 设置移除名单管理与抽选记录的重复入口，改由主界面顶部按钮直接打开独立窗口。",
   "releaseDate": "2026-10-30",
   "mandatory": false
 }
