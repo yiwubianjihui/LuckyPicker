@@ -40,8 +40,13 @@ namespace LuckyPickerWpf
             //    「已在运行」并退出，结果谁都起不来** —— 这正是用户报的
             //    「开机弹提示、但程序不启动」。Build 18 把进程数降级为**诊断日志**，
             //    不再参与判断。（互斥体随进程退出自动释放，不会像进程名那样被误判。）
+            // 自检需要与用户正在运行的实例并存（同一互斥体会让自检直接退出）
+            bool selfTestRun = e.Args != null && Array.IndexOf(e.Args, "--selftest") >= 0;
+            string mutexName = selfTestRun
+                ? AppVersion.SingleInstanceMutex + "-selftest"
+                : AppVersion.SingleInstanceMutex;
             bool first;
-            singleMutex = new System.Threading.Mutex(true, AppVersion.SingleInstanceMutex, out first);
+            singleMutex = new System.Threading.Mutex(true, mutexName, out first);
             int others = 0;
             try
             {

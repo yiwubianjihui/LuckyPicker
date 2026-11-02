@@ -841,47 +841,127 @@ namespace LuckyPickerWpf
             var dlg = new Window
             {
                 Icon = Icon,
-                Title = "名单编辑", Width = 760, Height = 580,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
+                Title = "名单编辑",
+                Width = 880,
+                Height = 640,
+                MinWidth = 760,
+                MinHeight = 520,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                Background = new SolidColorBrush(t.Canvas),
+                FontFamily = new FontFamily("Microsoft YaHei UI"),
+                UseLayoutRounding = true
             };
             var root = new Grid { Margin = new Thickness(18) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var rows = new ObservableCollection<Student>(
-                core.allStudents.Select(x => new Student { name = x.name, classId = x.classId, gender = x.gender, reading = x.reading }));
+                core.allStudents.Select(x => new Student
+                {
+                    name = x.name,
+                    classId = x.classId,
+                    gender = ImportUtil.NormalizeGender(x.gender),
+                    reading = x.reading,
+                    blocked = x.blocked
+                }));
+
+            var head = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
+            var countText = new TextBlock
+            {
+                FontSize = 11.5,
+                Foreground = new SolidColorBrush(t.Sub),
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            var titleStack = new StackPanel();
+            titleStack.Children.Add(new TextBlock
+            {
+                Text = "名单编辑",
+                FontSize = 18,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(t.Ink)
+            });
+            titleStack.Children.Add(new TextBlock
+            {
+                Text = "双击单元格修改；班级列可直接输入新班号（如 5、5班、高一(5)班）。",
+                FontSize = 11.5,
+                Foreground = new SolidColorBrush(t.Sub),
+                Margin = new Thickness(0, 4, 0, 0)
+            });
+            DockPanel.SetDock(countText, Dock.Right);
+            head.Children.Add(countText);
+            head.Children.Add(titleStack);
+            Grid.SetRow(head, 0);
+            root.Children.Add(head);
 
             var grid = new DataGrid
             {
-                AutoGenerateColumns = false, CanUserAddRows = true, ItemsSource = rows,
-                HeadersVisibility = DataGridHeadersVisibility.Column, RowHeaderWidth = 0,
-                Margin = new Thickness(0, 0, 0, 10), CanUserDeleteRows = true,
-                RowHeight = 34, FontSize = 13,
+                AutoGenerateColumns = false,
+                CanUserAddRows = false,
+                CanUserDeleteRows = true,
+                ItemsSource = rows,
+                SelectionMode = DataGridSelectionMode.Extended,
+                SelectionUnit = DataGridSelectionUnit.FullRow,
+                HeadersVisibility = DataGridHeadersVisibility.Column,
+                RowHeaderWidth = 0,
+                CanUserSortColumns = false,
+                Margin = new Thickness(0, 0, 0, 10),
+                RowHeight = 36,
+                FontSize = 13,
                 GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
                 HorizontalGridLinesBrush = new SolidColorBrush(t.Canvas),
-                Background = new SolidColorBrush(t.Surface), BorderBrush = new SolidColorBrush(t.Stroke),
-                BorderThickness = new Thickness(1), RowBackground = new SolidColorBrush(t.Surface),
+                Background = new SolidColorBrush(t.Surface),
+                BorderBrush = new SolidColorBrush(t.Stroke),
+                BorderThickness = new Thickness(1),
+                RowBackground = new SolidColorBrush(t.Surface),
                 AlternatingRowBackground = new SolidColorBrush(t.SurfaceMuted),
-                UseLayoutRounding = true, SnapsToDevicePixels = true
+                UseLayoutRounding = true,
+                SnapsToDevicePixels = true
             };
             rosterEditorGrid = grid;
+
+            void UpdateCount()
+            {
+                int classCount = rows.Select(r => ImportUtil.NormalizeClass(r.classId))
+                    .Where(c => c.Length > 0)
+                    .Distinct(StringComparer.Ordinal)
+                    .Count();
+                countText.Text = "共 " + rows.Count + " 人 · " + classCount + " 个班";
+            }
+            rows.CollectionChanged += (s, e) => UpdateCount();
+            grid.CellEditEnding += (s, e) => Dispatcher.BeginInvoke(new Action(UpdateCount));
+
             grid.Columns.Add(new DataGridTextColumn
             {
                 Header = "姓名",
                 Binding = new System.Windows.Data.Binding("name"),
                 Width = new DataGridLength(1, DataGridLengthUnitType.Star)
             });
-            var classCol = new DataGridComboBoxColumn
+
+            // 班级列用可编辑下拉框：既能选已有班级，也能直接输入新班号
+            var classIds = core.classIds.ToList();
+            var classFactory = new FrameworkElementFactory(typeof(ComboBox));
+            classFactory.SetValue(FrameworkElement.HeightProperty, 28.0);
+            classFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(4, 0, 4, 0));
+            classFactory.SetValue(Control.FontSizeProperty, 12.5);
+            classFactory.SetValue(ComboBox.IsEditableProperty, true);
+            classFactory.SetValue(ItemsControl.ItemsSourceProperty, classIds);
+            classFactory.SetBinding(ComboBox.TextProperty, new System.Windows.Data.Binding("classId")
+            {
+                Mode = System.Windows.Data.BindingMode.TwoWay,
+                UpdateSourceTrigger = System.Windows.Data.UpdateSourceTrigger.LostFocus
+            });
+            classFactory.SetValue(FrameworkElement.ToolTipProperty, "可直接输入新班号，如 5、5班、高一(5)班");
+            grid.Columns.Add(new DataGridTemplateColumn
             {
                 Header = "班级",
-                SelectedValueBinding = new System.Windows.Data.Binding("classId"),
-                SelectedValuePath = "Key", DisplayMemberPath = "Value",
-                Width = new DataGridLength(150)
-            };
-            classCol.ItemsSource = core.classIds
-                .Select(id => new KeyValuePair<string, string>(id, core.ClassName(id))).ToList();
-            grid.Columns.Add(classCol);
+                CellTemplate = new DataTemplate { VisualTree = classFactory },
+                Width = new DataGridLength(170)
+            });
+
             var genderCol = new DataGridComboBoxColumn
             {
                 Header = "性别",
@@ -900,64 +980,149 @@ namespace LuckyPickerWpf
             {
                 Header = "读音",
                 Binding = new System.Windows.Data.Binding("reading"),
-                Width = new DataGridLength(130)
+                Width = new DataGridLength(140)
             });
-            Grid.SetRow(grid, 0);
+            Grid.SetRow(grid, 1);
             root.Children.Add(grid);
 
             var tip = new TextBlock
             {
-                Text = "双击单元格直接修改；「读音」列填同音字可纠正多音字朗读（如 曾→增），选中行可点「设置读音」选择。",
+                Text = "空白姓名行会被忽略；同班重名会在保存前提醒。保存前自动备份当前名单，替换导入也有备份可恢复。",
                 FontSize = 11.5, TextWrapping = TextWrapping.Wrap,
                 Foreground = new SolidColorBrush(t.Sub),
                 Margin = new Thickness(0, 0, 0, 10)
             };
-            Grid.SetRow(tip, 1);
+            Grid.SetRow(tip, 2);
             root.Children.Add(tip);
 
-            var btns = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            var footer = new DockPanel { Margin = new Thickness(0, 2, 0, 0) };
+            var leftButtons = new StackPanel { Orientation = Orientation.Horizontal };
             var modernGhost2 = (Style)FindResource("ModernBtnGhost");
             var modernMain2 = (Style)FindResource("ModernBtn");
+            var bAdd = new Button { Content = "＋ 新增学生", Width = 118, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = modernGhost2 };
             var bReading = new Button { Content = "设置读音…", Width = 104, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = modernGhost2 };
             rosterEditorReadingButton = bReading;
-            var bDel = new Button { Content = "删除选中行", Width = 110, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = modernGhost2 };
+            var bDel = new Button { Content = "删除选中", Width = 96, Height = 36, Cursor = Cursors.Hand, Style = modernGhost2 };
+            leftButtons.Children.Add(bAdd); leftButtons.Children.Add(bReading); leftButtons.Children.Add(bDel);
+
+            var rightButtons = new StackPanel { Orientation = Orientation.Horizontal };
             var bSave = new Button { Content = "保存", Width = 90, Height = 36, Cursor = Cursors.Hand, Margin = new Thickness(0, 0, 10, 0), Style = modernMain2 };
             var bCancel = new Button { Content = "取消", Width = 90, Height = 36, Cursor = Cursors.Hand, Style = modernGhost2 };
+            rightButtons.Children.Add(bSave);
+            rightButtons.Children.Add(bCancel);
+            DockPanel.SetDock(rightButtons, Dock.Right);
+            footer.Children.Add(rightButtons);
+            footer.Children.Add(leftButtons);
+            Grid.SetRow(footer, 3);
+            root.Children.Add(footer);
+
+            bAdd.Click += (s, e) =>
+            {
+                string cid = (grid.SelectedItem as Student)?.classId ?? "";
+                if (string.IsNullOrWhiteSpace(cid)) cid = core.currentClassId;
+                if (string.IsNullOrWhiteSpace(cid)) cid = core.classIds.FirstOrDefault() ?? "1";
+                var st = new Student { classId = cid, gender = "" };
+                rows.Add(st);
+                grid.SelectedItem = st;
+                grid.ScrollIntoView(st);
+                grid.CurrentCell = new DataGridCellInfo(st, grid.Columns[0]);
+                grid.Focus();
+                grid.BeginEdit();
+            };
+            bDel.Click += (s, e) =>
+            {
+                var selected = grid.SelectedItems.Cast<Student>().ToList();
+                foreach (var st in selected) rows.Remove(st);
+            };
             bReading.Click += (s, e) =>
             {
+                if (grid.SelectedItems.Count > 1)
+                {
+                    MessageBox.Show(dlg, "请选择一个学生后再设置读音。", "设置读音",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
                 if (grid.SelectedItem is not Student st) return;
                 string? reading = ReadingDialog.Show(dlg, st.name ?? "", st.reading ?? "", text => Speak(text));
                 if (reading == null) return;
                 st.reading = reading;
                 grid.Items.Refresh();
             };
-            bDel.Click += (s, e) => { if (grid.SelectedItem is Student st) rows.Remove(st); };
-            bSave.Click += (s, e) => { SaveRoster(rows); dlg.Close(); };
+            bSave.Click += (s, e) =>
+            {
+                grid.CommitEdit(DataGridEditingUnit.Cell, true);
+                grid.CommitEdit(DataGridEditingUnit.Row, true);
+                if (SaveRoster(rows, dlg)) dlg.Close();
+            };
             bCancel.Click += (s, e) => dlg.Close();
-            btns.Children.Add(bReading); btns.Children.Add(bDel); btns.Children.Add(bSave); btns.Children.Add(bCancel);
-            Grid.SetRow(btns, 2);
-            root.Children.Add(btns);
+            UpdateCount();
 
             dlg.Content = root;
             return dlg;
         }
 
-        void SaveRoster(IEnumerable<Student> rows)
+        bool SaveRoster(IList<Student> source, Window owner)
         {
+            var cleaned = new List<Student>();
+            var pendingNames = new Dictionary<string, string>(StringComparer.Ordinal);
+            int emptyNames = 0;
+            foreach (var raw in source)
+            {
+                string name = RosterImport.CleanCell(raw.name);
+                if (name.Length == 0) { emptyNames++; continue; }
+                string rawClass = (raw.classId ?? "").Trim();
+                string cid = ImportUtil.NormalizeClass(rawClass);
+                if (cid.Length == 0)
+                    cid = !string.IsNullOrWhiteSpace(core.currentClassId) ? core.currentClassId : "1";
+                if (rawClass.Length > 0 && rawClass != cid && rawClass != cid + "班"
+                    && !core.classNames.ContainsKey(cid) && !pendingNames.ContainsKey(cid))
+                    pendingNames[cid] = rawClass;
+                cleaned.Add(new Student
+                {
+                    name = name,
+                    classId = cid,
+                    gender = ImportUtil.NormalizeGender(raw.gender),
+                    reading = RosterImport.CleanCell(raw.reading),
+                    blocked = raw.blocked
+                });
+            }
+
+            if (emptyNames > 0 &&
+                MessageBox.Show(owner, "有 " + emptyNames + " 行未填写姓名，将被忽略。\n\n继续保存？",
+                    "名单编辑", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return false;
+
+            int dupGroups = cleaned
+                .GroupBy(s => s.classId + "\u0001" + s.name, StringComparer.OrdinalIgnoreCase)
+                .Count(g => g.Count() > 1);
+            if (dupGroups > 0 &&
+                MessageBox.Show(owner, "有 " + dupGroups + " 组同班重名学生。\n\n仍要保存吗？",
+                    "名单编辑", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return false;
+
+            if (cleaned.Count == 0 &&
+                MessageBox.Show(owner, "名单为空，保存后将没有学生可抽取。\n\n确定保存空名单？",
+                    "名单编辑", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes) return false;
+
             try
             {
-                var list = rows.Where(x => !string.IsNullOrWhiteSpace(x.name)).ToList();
                 var classes = new Dictionary<string, string>(core.classNames);
-                foreach (var s in list)
-                    if (!classes.ContainsKey(s.classId)) classes[s.classId] = s.classId + "班";
-                LuckyCore.SaveDataFile(new DataFile { classes = classes, students = list });
+                foreach (var s in cleaned)
+                {
+                    if (classes.ContainsKey(s.classId)) continue;
+                    classes[s.classId] = pendingNames.TryGetValue(s.classId, out string? display) && !string.IsNullOrWhiteSpace(display)
+                        ? display : s.classId + "班";
+                }
+                RosterImport.BackupCurrent("editor");
+                LuckyCore.SaveDataFile(new DataFile { classes = classes, students = cleaned });
                 core.Reload();
                 InitCore();
-                HintText.Text = "√ 名单已保存（" + list.Count + " 名学生）";
+                HintText.Text = "√ 名单已保存（" + cleaned.Count + " 名学生 · "
+                    + cleaned.Select(s => s.classId).Distinct(StringComparer.Ordinal).Count() + " 个班级）";
+                return true;
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "保存失败：" + ex.Message, "名单编辑", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(owner, "保存失败：" + ex.Message, "名单编辑", MessageBoxButton.OK, MessageBoxImage.Error);
+                return false;
             }
         }
 
@@ -973,78 +1138,299 @@ namespace LuckyPickerWpf
             var dlg = new Window
             {
                 Icon = Icon,
-                Title = "名单管理", Width = 460, Height = 380,
-                WindowStartupLocation = WindowStartupLocation.CenterOwner, Owner = this
+                Title = "名单管理",
+                Width = 520,
+                Height = 650,
+                MinWidth = 480,
+                MinHeight = 580,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Owner = this,
+                Background = new SolidColorBrush(t.Canvas),
+                FontFamily = new FontFamily("Microsoft YaHei UI"),
+                UseLayoutRounding = true
             };
-            var panel = new StackPanel { Margin = new Thickness(20) };
-            panel.Children.Add(new TextBlock
+            var root = new Grid { Margin = new Thickness(22) };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var title = new TextBlock
             {
-                Text = "名单文件：" + LuckyCore.DataPath() + "\n保存在本机（%ProgramData%\\LuckyPicker），换机需手动备份。",
-                FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 14)
-            });
+                Text = "名单管理",
+                FontSize = 20,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(t.Ink)
+            };
+            Grid.SetRow(title, 0);
+            root.Children.Add(title);
+
+            var statsText = new TextBlock
+            {
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(t.Ink),
+                TextWrapping = TextWrapping.Wrap
+            };
+            var card = new Border
+            {
+                Background = new SolidColorBrush(t.Surface),
+                BorderBrush = new SolidColorBrush(t.Stroke),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(14, 12, 14, 12),
+                Margin = new Thickness(0, 14, 0, 14),
+                Child = new StackPanel
+                {
+                    Children =
+                    {
+                        statsText,
+                        new TextBlock
+                        {
+                            Text = "数据文件：" + LuckyCore.DataPath(),
+                            FontSize = 11,
+                            Foreground = new SolidColorBrush(t.Muted),
+                            TextWrapping = TextWrapping.Wrap,
+                            Margin = new Thickness(0, 5, 0, 0)
+                        },
+                        new TextBlock
+                        {
+                            Text = "导入或保存前自动备份到 backups 文件夹（保留最近 20 份），替换名单也可恢复。",
+                            FontSize = 11,
+                            Foreground = new SolidColorBrush(t.Sub),
+                            TextWrapping = TextWrapping.Wrap,
+                            Margin = new Thickness(0, 4, 0, 0)
+                        }
+                    }
+                }
+            };
+            Grid.SetRow(card, 1);
+            root.Children.Add(card);
+
+            void RefreshStats()
+            {
+                string text = "当前 " + core.allStudents.Count + " 名学生 · " + core.classIds.Count + " 个班级";
+                try
+                {
+                    string path = LuckyCore.DataPath();
+                    if (File.Exists(path))
+                        text += " · 最近保存 " + File.GetLastWriteTime(path).ToString("yyyy-MM-dd HH:mm");
+                }
+                catch { }
+                statsText.Text = text;
+            }
+            RefreshStats();
+
+            var buttons = new StackPanel();
+            Button MakeButton(string text, Style style, Thickness margin) => new()
+            {
+                Content = text,
+                Height = 40,
+                Margin = margin,
+                Cursor = Cursors.Hand,
+                Style = style
+            };
             var modern = (Style)FindResource("ModernBtn");
             var modernGhost = (Style)FindResource("ModernBtnGhost");
-            var btnEdit = new Button { Content = "编辑名单（表格直接增删改）", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modern };
-            var btnImport = new Button { Content = "导入 Excel / CSV / JSON 名单", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modern };
-            var btnExport = new Button { Content = "导出备份（复制名单文件到桌面）", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modernGhost };
-            var btnOpenDir = new Button { Content = "打开名单所在文件夹", Height = 38, Margin = new Thickness(0, 0, 0, 8), Cursor = Cursors.Hand, Style = modernGhost };
-            var status = new TextBlock { FontSize = 12, Foreground = new SolidColorBrush(t.AccentInk), TextWrapping = TextWrapping.Wrap };
+            var btnEdit = MakeButton("编辑名单（表格直接增删改）", modern, new Thickness(0, 0, 0, 8));
+            var btnImport = MakeButton("导入名单（Excel / CSV / JSON）", modern, new Thickness(0, 0, 0, 8));
+            var btnTemplate = MakeButton("下载导入模板…", modernGhost, new Thickness(0, 0, 0, 8));
+            var btnExport = MakeButton("导出名单 CSV（Excel 可打开）", modernGhost, new Thickness(0, 0, 0, 8));
+            var btnBackup = MakeButton("备份名单 JSON…", modernGhost, new Thickness(0, 0, 0, 8));
+            var btnOpenDir = MakeButton("打开名单文件夹", modernGhost, new Thickness(0));
+            buttons.Children.Add(btnEdit);
+            buttons.Children.Add(btnImport);
+            buttons.Children.Add(btnTemplate);
+            buttons.Children.Add(btnExport);
+            buttons.Children.Add(btnBackup);
+            buttons.Children.Add(btnOpenDir);
+            Grid.SetRow(buttons, 2);
+            root.Children.Add(buttons);
+
+            var status = new TextBlock
+            {
+                FontSize = 11.5,
+                Foreground = new SolidColorBrush(t.AccentInk),
+                TextWrapping = TextWrapping.Wrap,
+                MinHeight = 18,
+                Margin = new Thickness(0, 12, 0, 0)
+            };
+            Grid.SetRow(status, 3);
+            root.Children.Add(status);
+
+            btnEdit.Click += (s, e) => { dlg.Close(); ShowRosterEditor(); };
 
             btnImport.Click += (s, e) =>
             {
-                var ofd = new Microsoft.Win32.OpenFileDialog { Filter = "名单文件|*.xlsx;*.csv;*.json|Excel|*.xlsx|CSV|*.csv|JSON 备份|*.json" };
-                if (ofd.ShowDialog(this) != true) return;
-                try
+                var ofd = new Microsoft.Win32.OpenFileDialog
                 {
-                    var data = ParseRoster(ofd.FileName);
-                    if (data == null || data.students.Count == 0)
-                    {
-                        status.Text = "未解析出学生，请检查文件格式。";
-                        status.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 38, 38));
-                        return;
-                    }
-                    LuckyCore.SaveDataFile(new DataFile { classes = data.classes, students = data.students });
-                    core.Reload();
-                    InitCore();
-                    status.Text = "已导入 " + data.students.Count + " 名学生并保存 ✓";
-                    // 询问：批量预生成语音缓存（此后抽取即读，无需联网等待）
-                    var askPrefetch = MessageBox.Show(this,
-                        "已导入 " + data.students.Count + " 名学生。\n\n是否立即预生成全部姓名的语音缓存？\n（生成后抽取播报秒开，不依赖网络；生成中可随时取消）",
-                        "预生成语音缓存", MessageBoxButton.YesNo, MessageBoxImage.Question);
-                    if (askPrefetch == MessageBoxResult.Yes)
-                    {
-                        var names = data.students.Select(NameReading.Spoken).Where(n => n.Length > 0).Distinct().ToList();
-                        Dispatcher.BeginInvoke(() => ShowPrefetchDialog(names));
-                    }
-                }
-                catch (Exception ex) { status.Text = "导入失败：" + ex.Message; status.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 38, 38)); }
+                    Title = "选择名单文件",
+                    Filter = "名单文件|*.xlsx;*.csv;*.json|Excel|*.xlsx|CSV|*.csv|JSON 备份|*.json"
+                };
+                if (ofd.ShowDialog(dlg) != true) return;
+                if (ofd.FileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                    ImportJsonRoster(dlg, ofd.FileName, status, RefreshStats);
+                else
+                    ImportTableRoster(dlg, ofd.FileName, status, RefreshStats);
             };
+
+            btnTemplate.Click += (s, e) =>
+            {
+                if (RosterTemplate.SaveInteractive(dlg))
+                    SetRosterStatus(status, "模板已保存；填好后用「导入名单」选择该文件。", false);
+            };
+
             btnExport.Click += (s, e) =>
             {
+                var sfd = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "导出名单",
+                    Filter = "CSV 名单 (*.csv)|*.csv",
+                    FileName = "YBH幸运摇人器-名单-" + DateTime.Now.ToString("yyyyMMdd") + ".csv",
+                    InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                    AddExtension = true,
+                    OverwritePrompt = true
+                };
+                if (sfd.ShowDialog(dlg) != true) return;
                 try
                 {
-                    string dst = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                        "LuckyPicker名单备份_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".json");
-                    Directory.CreateDirectory(LuckyCore.DataDir());
-                    File.Copy(LuckyCore.DataPath(), dst, true);
-                    status.Text = "已导出到：" + dst;
+                    RosterImport.ExportCsv(sfd.FileName, CurrentRosterData());
+                    SetRosterStatus(status, "已导出 " + core.allStudents.Count + " 名学生：" + sfd.FileName, false);
                 }
-                catch (Exception ex) { status.Text = "导出失败：" + ex.Message; }
+                catch (Exception ex) { SetRosterStatus(status, "导出失败：" + ex.Message, true); }
             };
+
+            btnBackup.Click += (s, e) =>
+            {
+                var sfd = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "备份名单",
+                    Filter = "JSON 备份 (*.json)|*.json",
+                    FileName = "LuckyPicker名单备份_" + DateTime.Now.ToString("yyyyMMdd_HHmm") + ".json",
+                    InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                    AddExtension = true,
+                    OverwritePrompt = true
+                };
+                if (sfd.ShowDialog(dlg) != true) return;
+                try
+                {
+                    string json = System.Text.Json.JsonSerializer.Serialize(CurrentRosterData(),
+                        new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+                    JsonStorage.WriteAtomic(sfd.FileName, json);
+                    SetRosterStatus(status, "已备份 " + core.allStudents.Count + " 名学生：" + sfd.FileName, false);
+                }
+                catch (Exception ex) { SetRosterStatus(status, "备份失败：" + ex.Message, true); }
+            };
+
             btnOpenDir.Click += (s, e) =>
             {
-                try { Directory.CreateDirectory(LuckyCore.DataDir()); System.Diagnostics.Process.Start("explorer.exe", LuckyCore.DataDir()); } catch { }
+                try
+                {
+                    Directory.CreateDirectory(LuckyCore.DataDir());
+                    System.Diagnostics.Process.Start("explorer.exe", LuckyCore.DataDir());
+                }
+                catch { }
             };
-            btnEdit.Click += (s, e) => { dlg.Close(); ShowRosterEditor(); };
-            panel.Children.Add(btnEdit);
-            panel.Children.Add(btnImport);
-            panel.Children.Add(btnExport);
-            panel.Children.Add(btnOpenDir);
-            panel.Children.Add(status);
-            dlg.Content = panel;
+
+            dlg.Content = root;
             editorManagerWin = dlg;
             dlg.Closed += (s, e) => editorManagerWin = null;
             dlg.Show();
+        }
+
+        static void SetRosterStatus(TextBlock status, string text, bool error)
+        {
+            status.Text = text;
+            status.Foreground = new SolidColorBrush(error
+                ? Color.FromRgb(220, 38, 38) : ThemeManager.Current.AccentInk);
+        }
+
+        DataFile CurrentRosterData() => new()
+        {
+            classes = new Dictionary<string, string>(core.classNames, StringComparer.Ordinal),
+            students = core.allStudents.Select(s => new Student
+            {
+                name = s.name,
+                classId = s.classId,
+                gender = s.gender,
+                reading = s.reading,
+                blocked = s.blocked
+            }).ToList()
+        };
+
+        void ImportTableRoster(Window owner, string file, TextBlock status, Action refresh)
+        {
+            var selection = RosterImportWindow.Show(owner, file, CurrentRosterData());
+            if (selection == null) return;
+            ApplyRosterData(owner, selection.Data, selection.Replace, selection.ImportedCount, status, refresh);
+        }
+
+        void ImportJsonRoster(Window owner, string file, TextBlock status, Action refresh)
+        {
+            DataFile? incoming;
+            try
+            {
+                incoming = System.Text.Json.JsonSerializer.Deserialize<DataFile>(File.ReadAllText(file));
+            }
+            catch (Exception ex)
+            {
+                SetRosterStatus(status, "JSON 读取失败：" + ex.Message, true);
+                return;
+            }
+            if (incoming?.students == null || incoming.students.Count == 0)
+            {
+                SetRosterStatus(status, "该 JSON 中没有学生数据。", true);
+                return;
+            }
+
+            var ask = MessageBox.Show(owner,
+                "备份中有 " + incoming.students.Count + " 名学生。\n\n是：替换现有名单\n否：追加到现有名单（自动跳过重复）\n取消：不导入",
+                "导入 JSON 备份", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (ask == MessageBoxResult.Cancel) return;
+
+            bool replace = ask == MessageBoxResult.Yes;
+            var current = CurrentRosterData();
+            var build = RosterImport.BuildFromDataFile(incoming, replace ? null : current.students);
+            if (build.Accepted.Count == 0)
+            {
+                SetRosterStatus(status, replace ? "该备份中没有可导入的学生。"
+                    : "备份中的学生都已存在，未新增。", true);
+                return;
+            }
+            var merged = RosterImport.Merge(current, build, replace, incoming.classes);
+            ApplyRosterData(owner, merged, replace, build.Accepted.Count, status, refresh);
+        }
+
+        void ApplyRosterData(Window owner, DataFile data, bool replace, int imported, TextBlock status, Action refresh)
+        {
+            try
+            {
+                string? backup = RosterImport.BackupCurrent(replace ? "replace" : "append");
+                LuckyCore.SaveDataFile(data);
+                core.Reload();
+                InitCore();
+                SetRosterStatus(status,
+                    (replace ? "已导入 " : "已追加 ") + imported + " 名学生，当前共 "
+                    + core.allStudents.Count + " 人 · " + core.classIds.Count + " 个班 ✓"
+                    + (backup != null ? "\n原名单已备份：" + backup : ""), false);
+                refresh();
+                PromptPrefetch(owner, data);
+            }
+            catch (Exception ex)
+            {
+                SetRosterStatus(status, "导入失败：" + ex.Message, true);
+            }
+        }
+
+        void PromptPrefetch(Window owner, DataFile data)
+        {
+            if (data.students.Count == 0 || tts == null) return;
+            var ask = MessageBox.Show(owner,
+                "已导入 " + data.students.Count + " 名学生。\n\n是否立即预生成全部姓名的语音缓存？\n（生成后抽取播报秒开，不依赖网络；生成中可随时取消）",
+                "预生成语音缓存", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (ask != MessageBoxResult.Yes) return;
+            var names = data.students.Select(NameReading.Spoken).Where(n => n.Length > 0).Distinct().ToList();
+            Dispatcher.BeginInvoke(() => ShowPrefetchDialog(names, owner));
         }
 
         // ---------------- 批量预生成语音缓存（进度 + 取消） ----------------
@@ -1291,41 +1677,6 @@ namespace LuckyPickerWpf
             if (modal) dlg.ShowDialog(); else dlg.Show();
         }
 
-        // ---------- 解析名单文件 ----------
-        static DataFile? ParseRoster(string path)
-        {
-            List<List<string>> rows;
-            if (path.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase)) rows = XlsxReader.Read(path);
-            else if (path.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)) rows = CsvReader.Read(path);
-            else if (path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
-            {
-                try { return System.Text.Json.JsonSerializer.Deserialize<DataFile>(File.ReadAllText(path)); }
-                catch { return null; }
-            }
-            else return null;
-            if (rows == null || rows.Count < 2) return null;
-            int nameCol = ImportUtil.FindColumn(rows, "name", "姓名", "名字", "学生");
-            int classCol = ImportUtil.FindColumn(rows, "classId", "class", "班级", "班");
-            int genderCol = ImportUtil.FindColumn(rows, "gender", "性别");
-            int readingCol = ImportUtil.FindColumn(rows, "reading", "读音", "朗读");
-            if (nameCol < 0) return null;
-            var students = new List<Student>();
-            var classes = new Dictionary<string, string>();
-            for (int i = 1; i < rows.Count; i++)
-            {
-                var r = rows[i];
-                string name = (nameCol < r.Count ? r[nameCol] : "").Trim();
-                if (name.Length == 0) continue;
-                string cid = classCol >= 0 && classCol < r.Count ? ImportUtil.NormalizeClass(r[classCol]) : "1";
-                if (cid.Length == 0) cid = "1";
-                string g = genderCol >= 0 && genderCol < r.Count ? ImportUtil.NormalizeGender(r[genderCol]) : "";
-                string reading = readingCol >= 0 && readingCol < r.Count ? r[readingCol].Trim() : "";
-                students.Add(new Student { name = name, classId = cid, gender = g, reading = reading });
-                if (!classes.ContainsKey(cid)) classes[cid] = cid + "班";
-            }
-            return new DataFile { classes = classes, students = students };
-        }
-
         // ---------- 关闭 → 托盘 ----------
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
@@ -1450,6 +1801,7 @@ namespace LuckyPickerWpf
         internal HistoryWindow? HistoryWindowForTest => historyWin;
         internal Window? EditorManagerForTest => editorManagerWin;
         internal Window BuildRosterEditorForTest() => BuildRosterEditor();
+        internal int RosterEditorRowCountForTest => rosterEditorGrid?.Items.Count ?? -1;
         internal bool RosterEditorHasReadingUiForTest =>
             rosterEditorGrid != null
             && rosterEditorGrid.Columns.Any(c => string.Equals(c.Header as string, "读音"))

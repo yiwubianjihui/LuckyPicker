@@ -1,12 +1,12 @@
 {
   "product": "YBH幸运摇人器",
-  "version": "1.2.1+23",
-  "build": 23,
+  "version": "1.2.2+24",
+  "build": 24,
   "channel": "1.2",
   "url": "https://lr.yibianhui.cn/",
-  "setupUrl": "https://lr.yibianhui.cn/download/LuckyPicker-win-setup-1.2.1+build23.exe",
-  "setupSha256": "0b7fcfcc00febf922930506232c80d6134d463169ddcbcf73374ea5f1911fe45",
-  "notes": "1. 姓名新增「读音」选择：多音字姓名可按同音字纠正朗读，抽选结果与记录仍显示原名。\n2. 设置移除名单管理与抽选记录的重复入口，改由主界面顶部按钮直接打开独立窗口。",
-  "releaseDate": "2026-10-30",
+  "setupUrl": "https://lr.yibianhui.cn/download/LuckyPicker-win-setup-1.2.2+build24.exe",
+  "setupSha256": "480ad335f55231777a66a41e351ceb5bee17d8c8b841e4e96aff21c9ce3ea6eb",
+  "notes": "1. 名单导入新增预览与列匹配：姓名/班级/性别/读音四列可调整，支持追加去重与整表替换。\n2. 导入与编辑保存前自动备份（保留 20 份），新增内置 Excel / CSV 导入模板。\n3. 班级与性别写法自动归一化；名单编辑器支持新增学生、直接输入新班号与多选删除。",
+  "releaseDate": "2026-11-02",
   "mandatory": false
 }

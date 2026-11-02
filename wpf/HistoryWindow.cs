@@ -18,6 +18,9 @@ namespace LuckyPickerWpf
         ListBox? list;
         TextBlock? info;
 
+        internal bool HistoryContentBuiltForTest => list != null;
+        internal int HistoryItemCountForTest => list?.Items.Count ?? 0;
+
         public HistoryWindow(Window owner)
         {
             Icon = owner.Icon;

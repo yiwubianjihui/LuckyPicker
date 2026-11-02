@@ -6,10 +6,12 @@
 // ================================================================
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 
 namespace LuckyPickerWpf
@@ -194,39 +196,81 @@ namespace LuckyPickerWpf
 
     public static class ImportUtil
     {
-        // 规范化班级号：优先提取连续数字（"19班" -> "19"），否则保留原文
-        public static string NormalizeClass(string s)
+        // 规范化班级号：优先提取「班」前的数字（"19班" -> "19"），
+        // 支持 "高一(3)班"、"2026级3班"、"三班"、"３班" 与 Excel 的 "3.0"。
+        public static string NormalizeClass(string? s)
         {
-            if (s == null) return "";
-            s = s.Trim();
-            if (s.Length == 0) return "";
-            var digits = new StringBuilder();
-            foreach (char ch in s)
-                if (ch >= '0' && ch <= '9') digits.Append(ch);
-            if (digits.Length > 0) return digits.ToString();
-            return s;
+            if (string.IsNullOrWhiteSpace(s)) return "";
+            var sb = new StringBuilder(s.Length);
+            foreach (char ch in s.Trim())
+                sb.Append(ch >= '０' && ch <= '９' ? (char)('0' + (ch - '０')) : ch);
+            string text = sb.ToString().Trim();
+            if (text.Length == 0) return "";
+
+            if (decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal dec)
+                && dec == decimal.Truncate(dec) && dec >= 0 && dec <= 999999)
+                return ((long)dec).ToString(CultureInfo.InvariantCulture);
+
+            var beforeClass = Regex.Match(text, @"(\d+)\s*班");
+            if (beforeClass.Success) return TrimLeadingZeros(beforeClass.Groups[1].Value);
+
+            string numeral = text.EndsWith("班", StringComparison.Ordinal)
+                ? text.Substring(0, text.Length - 1).Trim() : text;
+            if (TryChineseNumber(numeral, out int chinese)) return chinese.ToString(CultureInfo.InvariantCulture);
+
+            var matches = Regex.Matches(text, @"\d+");
+            if (matches.Count > 0) return TrimLeadingZeros(matches[matches.Count - 1].Value);
+            return text;
         }
 
-        public static string NormalizeGender(string s)
+        static string TrimLeadingZeros(string digits)
         {
-            if (s == null) return "";
-            if (s.Contains("男")) return "male";
-            if (s.Contains("女")) return "female";
-            return LuckyCore.NormalizeGender(s);
+            string trimmed = digits.TrimStart('0');
+            return trimmed.Length == 0 ? "0" : trimmed;
         }
 
-        // 在首行中查找包含关键字的列
-        public static int FindColumn(List<List<string>> rows, params string[] keys)
+        static bool TryChineseNumber(string s, out int value)
         {
-            if (rows == null || rows.Count == 0) return -1;
-            var first = rows[0];
-            for (int c = 0; c < first.Count; c++)
+            value = 0;
+            if (string.IsNullOrEmpty(s) || s.Length > 3) return false;
+            var digits = new Dictionary<char, int>
             {
-                string v = (first[c] ?? "").Trim();
-                foreach (var k in keys)
-                    if (v.Length > 0 && v.Contains(k)) return c;
+                { '零', 0 }, { '一', 1 }, { '二', 2 }, { '两', 2 }, { '三', 3 }, { '四', 4 },
+                { '五', 5 }, { '六', 6 }, { '七', 7 }, { '八', 8 }, { '九', 9 }
+            };
+            if (s.Length == 1)
+            {
+                if (s[0] == '十') { value = 10; return true; }
+                if (digits.TryGetValue(s[0], out int single)) { value = single; return true; }
+                return false;
             }
-            return -1;
+            int ten = s.IndexOf('十');
+            if (ten < 0 || s.LastIndexOf('十') != ten) return false;
+            int tens = 1;
+            if (ten > 0)
+            {
+                if (!digits.TryGetValue(s[0], out tens) || ten != 1) return false;
+            }
+            int ones = 0;
+            string tail = s.Substring(ten + 1);
+            if (tail.Length > 0)
+            {
+                if (tail.Length != 1 || !digits.TryGetValue(tail[0], out ones)) return false;
+            }
+            value = tens * 10 + ones;
+            return value > 0 && value <= 99;
+        }
+
+        public static string NormalizeGender(string? s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return "";
+            string text = s.Trim();
+            string lower = text.ToLowerInvariant();
+            if (lower is "男" or "男生" or "male" or "m" or "boy" or "man") return "male";
+            if (lower is "女" or "女生" or "female" or "f" or "girl" or "woman") return "female";
+            if (text.Contains("男")) return "male";
+            if (text.Contains("女")) return "female";
+            return "";
         }
     }
 }

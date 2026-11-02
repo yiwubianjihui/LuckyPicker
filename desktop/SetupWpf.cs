@@ -20,9 +20,9 @@ using Microsoft.Win32;
 [assembly: AssemblyTitle("YBH幸运摇人器 安装程序")]
 [assembly: AssemblyProduct("YBH幸运摇人器")]
 [assembly: AssemblyCompany("YBH")]
-[assembly: AssemblyVersion("1.2.1.0")]
-[assembly: AssemblyFileVersion("1.2.1.0")]
-[assembly: AssemblyInformationalVersion("1.2.1+23")]
+[assembly: AssemblyVersion("1.2.2.0")]
+[assembly: AssemblyFileVersion("1.2.2.0")]
+[assembly: AssemblyInformationalVersion("1.2.2+24")]
 
 namespace LuckyPickerSetupWpf
 {
@@ -37,7 +37,7 @@ namespace LuckyPickerSetupWpf
         public const string LegacyShortcutName = "幸运摇人器";
         public const string UninstallShortcutName = "卸载 YBH幸运摇人器";
         public const string RegKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\LuckyPicker";
-        public const string Version = "1.2.1+23";
+        public const string Version = "1.2.2+24";
         public const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
         public const string RunValueName = "YBHLuckyPicker";
 
@@ -119,10 +119,22 @@ namespace LuckyPickerSetupWpf
             catch { }
         }
 
+        static void SetupLog(string msg)
+        {
+            try
+            {
+                File.AppendAllText(
+                    Path.Combine(Path.GetTempPath(), "luckypicker_setup.log"),
+                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + " " + msg + "\r\n");
+            }
+            catch { }
+        }
+
         public static void CreateShortcut(string shortcutPath, string targetPath, string workDir, string description)
         {
             Type shellType = Type.GetTypeFromProgID("WScript.Shell");
-            if (shellType == null) return;
+            if (shellType == null) { SetupLog("shellType=null path=" + shortcutPath); return; }
+            SetupLog("shortcut-start path=" + shortcutPath);
             dynamic shell = Activator.CreateInstance(shellType);
             dynamic lnk = shell.CreateShortcut(shortcutPath);
             lnk.TargetPath = targetPath;
@@ -130,6 +142,39 @@ namespace LuckyPickerSetupWpf
             lnk.Description = description;
             lnk.IconLocation = targetPath + ",0";
             lnk.Save();
+            SetupLog("shortcut-ok path=" + shortcutPath);
+        }
+
+        // 部分机器上提权账户与当前桌面/开始菜单目录不一致，创建失败时回退到公共目录，
+        // 保证安装流程不中断，且所有用户仍能看到快捷方式。
+        public static bool TryCreateShortcut(string shortcutPath, string targetPath, string workDir, string description, bool desktop)
+        {
+            try
+            {
+                CreateShortcut(shortcutPath, targetPath, workDir, description);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                SetupLog("shortcut-error path=" + shortcutPath + " " + ex.GetType().Name + ": " + ex.Message);
+                try
+                {
+                    string fallbackDir = desktop
+                        ? Environment.GetFolderPath(Environment.SpecialFolder.CommonDesktopDirectory)
+                        : Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms);
+                    if (string.IsNullOrEmpty(fallbackDir)) { SetupLog("fallback-dir-empty"); return false; }
+                    Directory.CreateDirectory(fallbackDir);
+                    string fallback = Path.Combine(fallbackDir, Path.GetFileName(shortcutPath));
+                    CreateShortcut(fallback, targetPath, workDir, description);
+                    SetupLog("fallback-ok path=" + fallback);
+                    return true;
+                }
+                catch (Exception ex2)
+                {
+                    SetupLog("fallback-error " + ex2.GetType().Name + ": " + ex2.Message);
+                    return false;
+                }
+            }
         }
 
         public static string StartMenuPath()
@@ -160,12 +205,20 @@ namespace LuckyPickerSetupWpf
 
         public static string DoInstall(string installDir, bool desktop, bool startMenu, bool preloadStudents, bool autoStart)
         {
+            string step = "准备安装";
             try
             {
+                SetupLog("install-start dir=" + installDir + " desktop=" + desktop + " startMenu=" + startMenu +
+                    " preload=" + preloadStudents + " boot=" + autoStart);
+                SetupLog("desktopPath=" + DesktopPath());
+                SetupLog("startMenuPath=" + StartMenuPath());
+                SetupLog("uninstallMenuPath=" + StartMenuUninstallPath());
+                step = "创建安装目录";
                 Directory.CreateDirectory(installDir);
                 string exePath = Path.Combine(installDir, AppExe);
                 string uninstPath = Path.Combine(installDir, UninstallExe);
 
+                step = "解压主程序";
                 string tmpZip = Path.Combine(Path.GetTempPath(), "lucky_app_" + Guid.NewGuid().ToString("N") + ".zip");
                 try
                 {
@@ -178,24 +231,29 @@ namespace LuckyPickerSetupWpf
                 }
 
                 // 名单放在共享数据目录；升级时保留用户名单，仅在首次安装时写入示例
+                step = "准备名单目录";
                 Directory.CreateDirectory(ProgramDataDir);
                 string dataPath = Path.Combine(ProgramDataDir, DataFile);
                 if (!File.Exists(dataPath) && preloadStudents)
                     ExtractResource(DemoData, dataPath);
                 GrantUsersModify(ProgramDataDir);
 
+                step = "写入卸载程序";
                 File.Copy(Application.ExecutablePath, uninstPath, true);
 
+                step = "创建快捷方式";
                 DeleteLegacyShortcuts();
                 if (startMenu)
                 {
-                    CreateShortcut(StartMenuPath(), exePath, installDir, "YBH幸运摇人器 - 班级随机摇人工具");
-                    CreateShortcut(StartMenuUninstallPath(), uninstPath, installDir, "卸载 YBH幸运摇人器（清理程序与本地数据）");
+                    TryCreateShortcut(StartMenuPath(), exePath, installDir, "YBH幸运摇人器 - 班级随机摇人工具", false);
+                    TryCreateShortcut(StartMenuUninstallPath(), uninstPath, installDir, "卸载 YBH幸运摇人器（清理程序与本地数据）", false);
                 }
-                if (desktop) CreateShortcut(DesktopPath(), exePath, installDir, "YBH幸运摇人器 - 班级随机摇人工具");
+                if (desktop) TryCreateShortcut(DesktopPath(), exePath, installDir, "YBH幸运摇人器 - 班级随机摇人工具", true);
 
+                step = "设置开机自启动";
                 SetAutoStart(autoStart, exePath);
 
+                step = "写入卸载注册表";
                 var key = Registry.LocalMachine.CreateSubKey(RegKey);
                 if (key != null)
                 {
@@ -209,11 +267,12 @@ namespace LuckyPickerSetupWpf
                     key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
                     key.Close();
                 }
+                SetupLog("install-ok");
                 return null;
             }
             catch (Exception ex)
             {
-                return ex.Message;
+                return step + "失败：" + ex.Message;
             }
         }
 
@@ -541,6 +600,16 @@ namespace LuckyPickerSetupWpf
                 bool preload = args.Length > si + 4 ? args[si + 4] == "1" : true;
                 bool boot = args.Length > si + 5 ? args[si + 5] == "1" : true;
                 string err = Installer.DoInstall(dir, desktop, startMenu, preload, boot);
+                if (err != null)
+                {
+                    try
+                    {
+                        File.WriteAllText(
+                            Path.Combine(Path.GetTempPath(), "luckypicker_setup_error.log"),
+                            DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\r\n" + err);
+                    }
+                    catch { }
+                }
                 Environment.Exit(err == null ? 0 : 1);
             }
 

@@ -118,7 +118,7 @@ namespace LuckyPickerWpf
             catch (Exception ex) { A("核心：JSON 原子写入与替换", false, ex.Message); }
             finally { try { File.Delete(temp); } catch { } }
 
-            A("版本：1.2.1+23 可提取构建号", UpdateManager.ExtractLastInt("1.2.1+23") == 23);
+            A("版本：1.2.2+24 可提取构建号", UpdateManager.ExtractLastInt("1.2.2+24") == 24);
             A("版本：构建号与显示版本一致", AppVersion.Build == UpdateManager.ExtractLastInt(AppVersion.Display),
               "Build=" + AppVersion.Build + " Display=" + AppVersion.Display);
             var update = UpdateManager.ParseJson("{\"version\":\"9.9.9+999\",\"build\":999,\"setupUrl\":\"https://example.com/setup.exe\",\"setupSha256\":\"ABC123\"}");
@@ -129,6 +129,8 @@ namespace LuckyPickerWpf
             A("语音：连抽 MP3 合并可识别帧格式并剥离 ID3", TtsEngine.Mp3ParserSelfTest(),
               "MPEG-1 44.1kHz 与 MPEG-2 24kHz 帧长/声道/标签剥离");
             A("语音：连抽 WAV 裁剪首尾静音并无缝拼接", TtsEngine.WavSequenceSelfTest(out string wavDetail), wavDetail);
+            A("名单导入：表头/列匹配/去重/JSON/CSV/模板",
+              RosterImport.SelfTest(out string rosterDetail), rosterDetail);
         }
 
         static void Execute(MainWindow win, string outPath)
@@ -464,10 +466,42 @@ namespace LuckyPickerWpf
                 var editor = win.BuildRosterEditorForTest();
                 A("1c2 独立名单编辑器提供读音列与「设置读音」按钮", win.RosterEditorHasReadingUiForTest,
                   "读音列 + 设置读音…");
-                try { editor.Close(); } catch { }
+                string shotRoot = Path.GetDirectoryName(outPath) ?? ".";
+                try
+                {
+                    editor.Show();
+                    Pump(300);
+                    A("1c3 名单编辑器可打开（新增学生/可编辑班级）", editor.IsVisible,
+                      "rows=" + win.RosterEditorRowCountForTest);
+                }
+                finally { try { editor.Close(); } catch { } }
+                Pump(200);
+
+                // 导入窗口：用内置模板走一遍真实 UI（自动识别表头/列 + 统计）
+                string importCsv = Path.Combine(Path.GetTempPath(),
+                    "lucky-import-ui-" + Guid.NewGuid().ToString("N") + ".csv");
+                try
+                {
+                    RosterTemplate.Save(importCsv);
+                    var importDlg = new RosterImportDialog(win, importCsv, new DataFile());
+                    importDlg.Show();
+                    Pump(350);
+                    string importSummary = importDlg.SummaryTextForTest;
+                    A("名单导入窗口：模板识别、预览与统计",
+                      importDlg.ImportEnabledForTest
+                      && importSummary.Contains("有效 5 人")
+                      && importDlg.PreviewRowsForTest >= 6,
+                      importSummary + " · 预览 " + importDlg.PreviewRowsForTest + " 行");
+                    A("截图 名单导入窗口",
+                      SaveShot(importDlg, Path.Combine(shotRoot, "roster_import.png")),
+                      Path.Combine(shotRoot, "roster_import.png"));
+                    importDlg.Close();
+                }
+                catch (Exception ex) { A("名单导入窗口：模板识别、预览与统计", false, ex.Message); }
+                finally { try { File.Delete(importCsv); } catch { } }
+                Pump(200);
 
                 // 主窗口截图（in-process，不依赖前台/截屏）
-                string shotRoot = Path.GetDirectoryName(outPath) ?? ".";
                 A("截图 主窗口", SaveShot(win, Path.Combine(shotRoot, "main_window.png")),
                   Path.Combine(shotRoot, "main_window.png"));
 
@@ -586,8 +620,9 @@ namespace LuckyPickerWpf
                   "navHistory=" + win.SettingsHasNavTitleForTest(sw, "抽选记录"));
                 if (hw != null)
                 {
-                    string historyShot = Path.Combine(Path.GetDirectoryName(outPath) ?? ".", "history_window.png");
-                    A("截图 抽选记录窗口", SaveShot(hw, historyShot), historyShot);
+                    // 不截图：记录里是真实学生姓名（隐私红线）
+                    A("6a2 记录窗口内容区已构建", hw.HistoryContentBuiltForTest,
+                      "items=" + hw.HistoryItemCountForTest);
                 }
                 hw?.Close();
                 Pump(300);

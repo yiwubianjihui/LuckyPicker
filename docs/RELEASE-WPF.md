@@ -51,7 +51,7 @@ FTP：`47.238.193.61`，上传到 `/LuckyRandom/download/<文件名>`。
 ## 6. 版本号与文案
 
 - 版本规则：自 `1.0+18` 起使用 **`主版本.次版本+构建号`**；每次正式发布构建号递增 1。
-- 当前用户界面与 `update.json` 使用 `1.2.1+23`；程序集使用 `1.2.1.0`，Electron 包使用 SemVer 等价格式 `1.2.1+23`。
+- 当前 Windows 界面与 `update.json` 使用 `1.2.2+24`；程序集使用 `1.2.2.0`。Android / Linux / Web 本次未重建，仍为 `1.2.1+23`。
 - 发布涉及：代码内版本文案（`SubText`）、`app.manifest` assemblyIdentity、
   下载文件名、`update.json`（build/notes）、下载页徽章。
 
