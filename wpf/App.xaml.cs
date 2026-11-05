@@ -9,6 +9,7 @@ namespace LuckyPickerWpf
     {
         public static LuckyCore Core = new();
         public static bool BootMinimized;
+        public static bool SelfTestMode;
         static bool Loaded;
         static System.Threading.Mutex? singleMutex;
         public static MainWindow? MainWin;
@@ -42,6 +43,7 @@ namespace LuckyPickerWpf
             //    不再参与判断。（互斥体随进程退出自动释放，不会像进程名那样被误判。）
             // 自检需要与用户正在运行的实例并存（同一互斥体会让自检直接退出）
             bool selfTestRun = e.Args != null && Array.IndexOf(e.Args, "--selftest") >= 0;
+            SelfTestMode = selfTestRun;
             string mutexName = selfTestRun
                 ? AppVersion.SingleInstanceMutex + "-selftest"
                 : AppVersion.SingleInstanceMutex;

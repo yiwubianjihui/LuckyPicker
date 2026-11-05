@@ -23,6 +23,9 @@ namespace LuckyPickerWpf
         bool animating;
         FloatingBallWindow? ball;
         bool classChosen;
+        bool syncingClassUi;
+        bool syncingDefaultChk;
+        bool startupPromptHandled;
         System.Windows.Forms.NotifyIcon? tray;
         bool reallyExit;
 
@@ -40,39 +43,82 @@ namespace LuckyPickerWpf
             catch { }
             App.Log("W-xaml");
             InitCore();
+            InitStartupClass();
             InitSpeech();
             App.Log("W-core");
             InitTray();
             ListenShowEvent();
             CheckUpdateSilent();
-            classChosen = false;
-            Loaded += (s, e) => Dispatcher.BeginInvoke(new Action(() =>
+            // 首次显示主窗口时若仍未确定班级（未设置默认班级），询问一次。
+            // 静默启动（/min）不在此弹窗；用户从悬浮球抽取时再由抽取入口询问。
+            Loaded += (s, e) =>
             {
-                try
+                if (startupPromptHandled) return;
+                startupPromptHandled = true;
+                if (App.SelfTestMode || classChosen) return;
+                Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    if (!string.IsNullOrEmpty(AppConfig.DefaultClassId) && core.classIds.Contains(AppConfig.DefaultClassId))
+                    try
                     {
-                        core.SetClass(AppConfig.DefaultClassId);
-                        classChosen = true;
-                        RefreshComboSelection();
-                        RefreshBadge();
-                        RefreshPoolStats();
-                        return;
+                        if (classChosen || TryApplyConfiguredDefault()) return;
+                        ShowClassMini(afterPick: () => DoBallPickOne());
                     }
-                    ShowClassMini();
-                }
-                catch (Exception ex) { App.Log("MINI-EX: " + ex); }
-            }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+                    catch (Exception ex) { App.Log("MINI-EX: " + ex); }
+                }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            };
             InitBall();
             App.Log("W-ball");
         }
 
+        /// <summary>启动时只应用已保存的默认班级；未设置则保持"待询问"状态。
+        /// 不依赖 Loaded（静默启动时窗口不会显示），因此 /min 启动也能直接用默认班级抽取。</summary>
+        void InitStartupClass()
+        {
+            classChosen = false;
+            TryApplyConfiguredDefault();
+            SyncDefaultClassUi();
+        }
+
+        /// <summary>尝试把配置里的默认班级应用到当前会话；返回是否成功。
+        /// 默认班级已被删除（无效）时清空配置，避免下次启动继续引用不存在的班级。</summary>
+        bool TryApplyConfiguredDefault()
+        {
+            string def = AppConfig.DefaultClassId ?? "";
+            if (def.Length == 0) return false;
+            if (!core.classIds.Contains(def))
+            {
+                App.Log("DEFAULT-CLASS-INVALID: " + def);
+                // 名单为空时可能只是尚未导入或读取失败，先不擦除配置；
+                // 名单非空且确实不存在该班级，才清理这条失效配置。
+                if (core.allStudents.Count > 0)
+                {
+                    AppConfig.DefaultClassId = "";
+                    AppConfig.Save();
+                }
+                SyncDefaultClassUi();
+                return false;
+            }
+            core.SetClass(def);
+            classChosen = true;
+            SyncClassUi();
+            RefreshBadge();
+            RefreshPoolStats();
+            return true;
+        }
+
         void InitCore()
         {
-            ClassCombo.Items.Clear();
-            foreach (var id in core.classIds) ClassCombo.Items.Add(core.ClassName(id));
-            int idx = core.classIds.IndexOf(core.currentClassId);
-            ClassCombo.SelectedIndex = idx >= 0 ? idx : 0;
+            // 程序化初始化不是用户操作：必须抑制 OnClassChanged，
+            // 否则启动时会把默认班级覆盖成第一个班级（默认班级永远"失效"）。
+            syncingClassUi = true;
+            try
+            {
+                ClassCombo.Items.Clear();
+                foreach (var id in core.classIds) ClassCombo.Items.Add(core.ClassName(id));
+                int idx = core.classIds.IndexOf(core.currentClassId);
+                ClassCombo.SelectedIndex = idx >= 0 ? idx : 0;
+            }
+            finally { syncingClassUi = false; }
             RefreshBadge();
             RefreshPoolStats();
             RenderBlockChips();
@@ -93,14 +139,16 @@ namespace LuckyPickerWpf
         // ---------- 班级 / 筛选 ----------
         void OnClassChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (syncingClassUi) return;   // 程序化同步（启动应用默认/名单刷新）不算用户选择
             int i = ClassCombo.SelectedIndex;
-            if (i >= 0 && i < core.classIds.Count)
-            {
-                core.SetClass(core.classIds[i]);
-                if (ClassDefaultChk != null && ClassDefaultChk.IsChecked == true)
-                { AppConfig.DefaultClassId = core.classIds[i]; AppConfig.Save(); }
-                RefreshBadge(); RefreshPoolStats(); ResetResult();
-            }
+            if (i < 0 || i >= core.classIds.Count) return;
+            core.SetClass(core.classIds[i]);
+            classChosen = true;
+            if (ClassDefaultChk != null && ClassDefaultChk.IsChecked == true)
+                SaveDefaultClass(core.classIds[i]);
+            else
+                SyncDefaultClassUi();      // 选中的正好是已配置默认时，勾选框应回到勾选态
+            RefreshBadge(); RefreshPoolStats(); ResetResult();
         }
 
         void RefreshBadge() => ClassBadgeText.Text = "● 当前班级：" + core.ClassName(core.currentClassId);
@@ -123,7 +171,9 @@ namespace LuckyPickerWpf
         }
 
         // ---------- 抽取 ----------
-        async void OnPick(object sender, RoutedEventArgs e)
+        void OnPick(object sender, RoutedEventArgs e) => EnsureClassForDraw(() => _ = PickOneAsync());
+
+        async Task PickOneAsync()
         {
             AudioUnmute.DefaultOutput();
             var s = core.PickOne();
@@ -134,7 +184,9 @@ namespace LuckyPickerWpf
             RefreshPoolStats();
         }
 
-        async void OnMulti(object sender, RoutedEventArgs e)
+        void OnMulti(object sender, RoutedEventArgs e) => EnsureClassForDraw(() => _ = MultiAsync());
+
+        async Task MultiAsync()
         {
             AudioUnmute.DefaultOutput();
             var list = core.PickMulti(5);
@@ -144,6 +196,20 @@ namespace LuckyPickerWpf
             tts?.SpeakSequence(list.Select(NameReading.Spoken).ToList());
             AddHistory(new HistoryEntry { time = Now(), text = "连抽： " + string.Join("、", names), classId = core.currentClassId });
             RefreshPoolStats();
+        }
+
+        /// <summary>所有抽取入口的统一前置条件：必须已确定班级。
+        /// 未设置默认班级时先询问一次；用户选好后再执行原本的抽取动作。
+        /// 返回 false 表示本次未抽取（正在等待用户选择班级）。</summary>
+        bool EnsureClassForDraw(Action ready, bool showPrompt = true)
+        {
+            if (classChosen || TryApplyConfiguredDefault())
+            {
+                ready();
+                return true;
+            }
+            if (showPrompt) ShowClassMini(afterPick: ready);
+            return false;
         }
 
         void OnReset(object sender, RoutedEventArgs e)
@@ -469,18 +535,16 @@ namespace LuckyPickerWpf
         void ShowBallPanel()
         {
             BallQuickPanel.ShowPanel(
-                pickOne: () =>
-                {
-                    if (!classChosen) { ShowClassMini(); return; }
-                    DoBallPickOne();
-                },
+                pickOne: DoBallPickOne,
                 showMain: () => ShowMainWindow(),
                 pinned: AppConfig.BallPinned,
                 onPinChanged: v => { AppConfig.BallPinned = v; AppConfig.Save(); ball?.SetPinned(v); },
                 ball);
         }
 
-        void DoBallPickOne()
+        void DoBallPickOne() => EnsureClassForDraw(() => DoBallPickOneCore());
+
+        void DoBallPickOneCore()
         {
             AudioUnmute.DefaultOutput();
             var picked = core.PickOne();
@@ -492,7 +556,9 @@ namespace LuckyPickerWpf
             RefreshPoolStats();
         }
 
-        void DoBallPickMulti()
+        void DoBallPickMulti() => EnsureClassForDraw(() => DoBallPickMultiCore());
+
+        void DoBallPickMultiCore()
         {
             AudioUnmute.DefaultOutput();
             var list = core.PickMulti(5);
@@ -506,22 +572,54 @@ namespace LuckyPickerWpf
         }
 
         ClassMiniWindow? mini;
+        ActionBox? miniAction;
+        int classPromptCount;
 
-        void ShowClassMini()
+        /// <summary>班级选择小窗。
+        /// afterPick：选定班级后继续执行的动作（抽取入口传入；设置里选默认班级时为 null）。
+        /// saveAsDefault：设置模式——选定即写为默认班级，且不立即抽取。</summary>
+        void ShowClassMini(Action? afterPick = null, bool saveAsDefault = false, string? subtitle = null)
         {
-            if (mini != null && mini.IsLoaded) { mini.Activate(); return; }   // 防重入
-            mini = new ClassMiniWindow(core.classIds, core.classNames, (cid, asDefault) =>
+            if (mini != null && mini.IsVisible)
             {
-                core.SetClass(cid);
-                classChosen = true;
-                if (asDefault) { AppConfig.DefaultClassId = cid; AppConfig.Save(); }
-                RefreshBadge();
-                RefreshComboSelection();
-                RefreshPoolStats();
-                DoBallPickOne();
-            });
-            if (ball != null && ball.IsVisible) mini.ShowNear(ball);
-            else { mini.WindowStartupLocation = WindowStartupLocation.CenterScreen; mini.Show(); }
+                // 小窗已开：更新后续动作（例如用户在等待期间又点了「连抽五人」）
+                if (miniAction != null && afterPick != null) miniAction.Value = afterPick;
+                mini.Activate();
+                return;
+            }
+
+            var slot = new ActionBox { Value = afterPick };
+            if (!saveAsDefault) classPromptCount++;
+            var win = new ClassMiniWindow(core.classIds, core.classNames, (cid, asDefault) =>
+            {
+                var next = slot.Value;
+                slot.Value = null;
+                ApplyClassChoice(cid, saveAsDefault || asDefault);
+                next?.Invoke();
+            }, subtitle: subtitle ?? "点选后立即抽取 · 点击空白处关闭", showDefaultOption: !saveAsDefault);
+            mini = win;
+            miniAction = slot;
+            win.Closed += (s, e) =>
+            {
+                if (ReferenceEquals(mini, win)) { mini = null; miniAction = null; }
+            };
+            if (ball != null && ball.IsVisible) win.ShowNear(ball);
+            else { win.WindowStartupLocation = WindowStartupLocation.CenterScreen; win.Show(); }
+        }
+
+        sealed class ActionBox { public Action? Value; }
+
+        /// <summary>应用一次班级选择（来自小窗 / 设置），并同步所有相关 UI。</summary>
+        void ApplyClassChoice(string cid, bool asDefault)
+        {
+            if (!core.classIds.Contains(cid)) return;
+            core.SetClass(cid);
+            classChosen = true;
+            if (asDefault) SaveDefaultClass(cid);
+            SyncClassUi();
+            RefreshBadge();
+            RefreshPoolStats();
+            ResetResult();
         }
 
         // ---------- 设置窗口（统一设置） ----------
@@ -558,7 +656,8 @@ namespace LuckyPickerWpf
                 ballChanged: ApplyBallSettings,
                 showUpdateDownload: res => ShowUpdateDownload(res, settingsWin, modal: false),
                 speak: text => { try { Speak(text); } catch { } },
-                changeDefaultClass: () => { AppConfig.DefaultClassId = ""; AppConfig.Save(); classChosen = false; ShowClassMini(); },
+                changeDefaultClass: () => ShowClassMini(saveAsDefault: true, subtitle: "点选后设为默认班级 · 不会立即抽取"),
+                onDefaultClassChanged: ApplyDefaultClassFromSettings,
                 onQuit: QuitApp,
                 themeChanged: ApplyTheme);
             settingsWin.Closed += (s, e) => settingsWin = null;
@@ -603,27 +702,98 @@ namespace LuckyPickerWpf
         }
 
         // ---------- 默认班级 ----------
-        void RefreshComboSelection()
+        /// <summary>程序化同步班级下拉与「设为默认」勾选态；不触发任何用户操作逻辑。</summary>
+        void SyncClassUi()
         {
-            int i = core.classIds.IndexOf(core.currentClassId);
-            if (i >= 0) ClassCombo.SelectedIndex = i;
+            syncingClassUi = true;
+            try
+            {
+                int i = core.classIds.IndexOf(core.currentClassId);
+                if (i >= 0) ClassCombo.SelectedIndex = i;
+            }
+            finally { syncingClassUi = false; }
+            SyncDefaultClassUi();
+        }
+
+        void SyncDefaultClassUi()
+        {
+            if (ClassDefaultChk == null) return;
+            bool isDefault = !string.IsNullOrEmpty(AppConfig.DefaultClassId)
+                             && string.Equals(AppConfig.DefaultClassId, core.currentClassId, StringComparison.Ordinal);
+            syncingDefaultChk = true;
+            try { ClassDefaultChk.IsChecked = isDefault; }
+            finally { syncingDefaultChk = false; }
+        }
+
+        void SaveDefaultClass(string cid)
+        {
+            AppConfig.DefaultClassId = cid;
+            AppConfig.Save();
+            SyncDefaultClassUi();
+        }
+
+        void ClearDefaultClass()
+        {
+            AppConfig.DefaultClassId = "";
+            AppConfig.Save();
+            SyncDefaultClassUi();
         }
 
         void OnClassDefaultChk(object sender, RoutedEventArgs e)
         {
-            if (ClassDefaultChk.IsChecked == true && ClassCombo.SelectedIndex >= 0)
+            if (syncingDefaultChk) return;   // 程序化同步勾选态，不是用户操作
+            if (ClassDefaultChk.IsChecked == true)
             {
-                AppConfig.DefaultClassId = core.currentClassId;
-                AppConfig.Save();
+                if (core.classIds.Contains(core.currentClassId)) SaveDefaultClass(core.currentClassId);
             }
+            else ClearDefaultClass();        // 取消勾选 = 清除默认，下次启动重新询问
         }
 
-        void OnMenuChangeDefaultClass(object sender, RoutedEventArgs e)
+        /// <summary>设置窗口改动默认班级后同步主窗口。空字符串 = 取消默认（本次会话仍保留当前班级）。</summary>
+        void ApplyDefaultClassFromSettings(string cid)
         {
-            AppConfig.DefaultClassId = "";
-            AppConfig.Save();
-            classChosen = false;
-            ShowClassMini();
+            if (string.IsNullOrEmpty(cid))
+            {
+                SyncDefaultClassUi();
+                return;
+            }
+            if (!core.classIds.Contains(cid)) return;
+            core.SetClass(cid);
+            classChosen = true;
+            SyncClassUi();
+            RefreshBadge();
+            RefreshPoolStats();
+            ResetResult();
+        }
+
+        /// <summary>名单增删后：默认班级若已不存在则清除；当前班级被删掉时优先回到默认班级。</summary>
+        void AfterRosterReload(string previousClassId)
+        {
+            bool defaultValid = !string.IsNullOrEmpty(AppConfig.DefaultClassId)
+                                && core.classIds.Contains(AppConfig.DefaultClassId);
+            if (!string.IsNullOrEmpty(AppConfig.DefaultClassId) && !defaultValid && core.allStudents.Count > 0)
+            {
+                AppConfig.DefaultClassId = "";
+                AppConfig.Save();
+            }
+
+            bool previousStillExists = core.classIds.Contains(previousClassId);
+            bool classChanged = false;
+            if (!previousStillExists)
+            {
+                classChanged = true;
+                if (defaultValid)
+                {
+                    core.SetClass(AppConfig.DefaultClassId);
+                    classChosen = true;
+                }
+                else classChosen = false;
+            }
+
+            SyncClassUi();
+            RefreshBadge();
+            RefreshPoolStats();
+            if (classChanged) ResetResult();
         }
 
         // ---------- 随机编号生成器 ----------
@@ -1112,9 +1282,11 @@ namespace LuckyPickerWpf
                         ? display : s.classId + "班";
                 }
                 RosterImport.BackupCurrent("editor");
+                string previousClassId = core.currentClassId;
                 LuckyCore.SaveDataFile(new DataFile { classes = classes, students = cleaned });
                 core.Reload();
                 InitCore();
+                AfterRosterReload(previousClassId);
                 HintText.Text = "√ 名单已保存（" + cleaned.Count + " 名学生 · "
                     + cleaned.Select(s => s.classId).Distinct(StringComparer.Ordinal).Count() + " 个班级）";
                 return true;
@@ -1406,9 +1578,11 @@ namespace LuckyPickerWpf
             try
             {
                 string? backup = RosterImport.BackupCurrent(replace ? "replace" : "append");
+                string previousClassId = core.currentClassId;
                 LuckyCore.SaveDataFile(data);
                 core.Reload();
                 InitCore();
+                AfterRosterReload(previousClassId);
                 SetRosterStatus(status,
                     (replace ? "已导入 " : "已追加 ") + imported + " 名学生，当前共 "
                     + core.allStudents.Count + " 人 · " + core.classIds.Count + " 个班 ✓"
@@ -1814,6 +1988,67 @@ namespace LuckyPickerWpf
         {
             bool ok = sw.CheckBallSizeForTest(d);
             PumpFrames(200);
+            return ok;
+        }
+
+        // ---- 默认班级 / 启动询问 ----
+        internal string DefaultClassIdForTest => AppConfig.DefaultClassId;
+        internal bool ClassChosenForTest => classChosen;
+        internal string CurrentClassIdForTest => core.currentClassId;
+        internal List<string> ClassIdsForTest => core.classIds;
+        internal int ClassComboIndexForTest => ClassCombo.SelectedIndex;
+        internal bool ClassDefaultCheckedForTest => ClassDefaultChk.IsChecked == true;
+        internal int ClassPromptCountForTest => classPromptCount;
+        internal void ResetClassPromptCountForTest() => classPromptCount = 0;
+        internal void SetClassChosenForTest(bool value) => classChosen = value;
+        internal void SetClassDefaultCheckedForTest(bool value)
+        {
+            ClassDefaultChk.IsChecked = value;
+            PumpFrames(80);
+        }
+        internal void ReinitCoreForTest()
+        {
+            InitCore();
+            PumpFrames(80);
+        }
+        internal void InitStartupClassForTest()
+        {
+            InitStartupClass();
+            PumpFrames(80);
+        }
+        internal void SetCurrentClassForTest(string cid)
+        {
+            if (!core.classIds.Contains(cid)) return;
+            core.SetClass(cid);
+            SyncClassUi();
+            RefreshBadge();
+            RefreshPoolStats();
+            PumpFrames(80);
+        }
+        internal void ApplyClassChoiceForTest(string cid, bool asDefault)
+        {
+            ApplyClassChoice(cid, asDefault);
+            PumpFrames(80);
+        }
+        internal bool EnsureClassForDrawForTest(Action ready, bool showPrompt)
+            => EnsureClassForDraw(ready, showPrompt);
+        internal void CloseClassMiniForTest()
+        {
+            try { mini?.Close(); } catch { }
+            PumpFrames(200);
+        }
+        internal void AfterRosterReloadForTest(string previousClassId)
+        {
+            AfterRosterReload(previousClassId);
+            PumpFrames(80);
+        }
+        internal int SettingsDefaultClassItemCountForTest(SettingsWindow sw) => sw.DefaultClassItemCountForTest;
+        internal string SettingsDefaultClassPlaceholderForTest(SettingsWindow sw) => sw.DefaultClassPlaceholderForTest;
+        internal int SettingsDefaultClassSelectedIndexForTest(SettingsWindow sw) => sw.DefaultClassSelectedIndexForTest;
+        internal bool SettingsSelectDefaultClassIndexForTest(SettingsWindow sw, int idx)
+        {
+            bool ok = sw.SelectDefaultClassIndexForTest(idx);
+            PumpFrames(120);
             return ok;
         }
 

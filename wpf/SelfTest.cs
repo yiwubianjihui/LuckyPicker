@@ -25,9 +25,10 @@ namespace LuckyPickerWpf
 
         static void Info(string text) => Lines.Add("INFO\t" + text);
 
-        // 自检会改动配置（球大小 / 固定 / 位置），结束后必须原样还原，避免污染用户设置
+        // 自检会改动配置（球大小 / 固定 / 位置 / 默认班级），结束后必须原样还原，避免污染用户设置
         static int origDiameter, origX, origY;
         static bool origPinned, origVisible;
+        static string origDefaultClass = "";
 
         public static void Run(MainWindow win, string outPath)
         {
@@ -36,6 +37,7 @@ namespace LuckyPickerWpf
             origVisible = AppConfig.BallVisible;
             origX = AppConfig.BallX;
             origY = AppConfig.BallY;
+            origDefaultClass = AppConfig.DefaultClassId;
             try
             {
                 Execute(win, outPath);
@@ -53,9 +55,10 @@ namespace LuckyPickerWpf
                     AppConfig.BallVisible = origVisible;
                     AppConfig.BallX = origX;
                     AppConfig.BallY = origY;
+                    AppConfig.DefaultClassId = origDefaultClass;
                     AppConfig.Save();
                     win.RestoreBallForTest(origX, origY);
-                    Info($"已还原用户配置：diameter={origDiameter} pinned={origPinned} visible={origVisible} pos=({origX},{origY})");
+                    Info($"已还原用户配置：diameter={origDiameter} pinned={origPinned} visible={origVisible} pos=({origX},{origY}) defaultClass={(string.IsNullOrEmpty(origDefaultClass) ? "(未设置)" : "已设置")}");
                 }
                 catch { }
                 try { File.WriteAllLines(outPath, Lines, Encoding.UTF8); } catch { }
@@ -118,7 +121,7 @@ namespace LuckyPickerWpf
             catch (Exception ex) { A("核心：JSON 原子写入与替换", false, ex.Message); }
             finally { try { File.Delete(temp); } catch { } }
 
-            A("版本：1.2.2+24 可提取构建号", UpdateManager.ExtractLastInt("1.2.2+24") == 24);
+            A("版本：1.2.3+25 可提取构建号", UpdateManager.ExtractLastInt("1.2.3+25") == 25);
             A("版本：构建号与显示版本一致", AppVersion.Build == UpdateManager.ExtractLastInt(AppVersion.Display),
               "Build=" + AppVersion.Build + " Display=" + AppVersion.Display);
             var update = UpdateManager.ParseJson("{\"version\":\"9.9.9+999\",\"build\":999,\"setupUrl\":\"https://example.com/setup.exe\",\"setupSha256\":\"ABC123\"}");
@@ -654,6 +657,127 @@ namespace LuckyPickerWpf
             Pump(500);
             A("顶部「抽取记录」不再进入设置窗口", win.SettingsWindowForTest == null,
               "settingsWin=" + (win.SettingsWindowForTest == null ? "null" : "非空"));
+
+            // ---------- 10. 默认班级：仅未设置时询问一次，否则直接使用默认 ----------
+            {
+                var ids = win.ClassIdsForTest;
+                string firstId = ids.Count > 0 ? ids[0] : "";
+                string lastId = ids.Count > 1 ? ids[ids.Count - 1] : firstId;
+                Info("默认班级用例：班级数=" + ids.Count + "（名单内容不输出）");
+
+                if (ids.Count >= 2)
+                {
+                    // 回归：初始化下拉（程序化选中第一个班级）不得覆盖已保存的默认班级
+                    AppConfig.DefaultClassId = lastId; AppConfig.Save();
+                    win.SetCurrentClassForTest(firstId);
+                    win.SetClassChosenForTest(false);
+                    win.ReinitCoreForTest();
+                    A("默认班级 1：程序化初始化下拉不覆盖已保存默认（回归）",
+                      AppConfig.DefaultClassId == lastId,
+                      $"保存→初始化后仍为同一班级={AppConfig.DefaultClassId == lastId}");
+
+                    // 启动应用默认：无需询问，已处于可抽取状态
+                    win.InitStartupClassForTest();
+                    bool defaultApplied = win.ClassChosenForTest
+                                   && win.CurrentClassIdForTest == lastId
+                                   && win.ClassComboIndexForTest == ids.IndexOf(lastId)
+                                   && win.ClassDefaultCheckedForTest;
+                    A("默认班级 2：启动直接应用默认班级（不询问，下拉与勾选同步）", defaultApplied,
+                      $"chosen={win.ClassChosenForTest} currentIsDefault={win.CurrentClassIdForTest == lastId} combo={win.ClassComboIndexForTest} checked={win.ClassDefaultCheckedForTest}");
+                }
+                else
+                    Info("默认班级 1/2 跳过：名单只有一个班级，无法区分默认与第一班");
+
+                // 未设置默认：保持待询问
+                AppConfig.DefaultClassId = ""; AppConfig.Save();
+                win.SetClassChosenForTest(false);
+                win.InitStartupClassForTest();
+                A("默认班级 3：未设置默认时保持待询问状态",
+                  !win.ClassChosenForTest && !win.ClassDefaultCheckedForTest && string.IsNullOrEmpty(AppConfig.DefaultClassId),
+                  $"chosen={win.ClassChosenForTest} checked={win.ClassDefaultCheckedForTest}");
+
+                // 首次抽取：弹出一次询问，且选班前不抽取
+                win.ResetClassPromptCountForTest();
+                int drew = 0;
+                bool firstDraw = win.EnsureClassForDrawForTest(() => drew++, showPrompt: true);
+                Pump(220);
+                A("默认班级 4：未选班时点击抽取消弹询问且不抽取",
+                  !firstDraw && drew == 0 && win.ClassPromptCountForTest == 1,
+                  $"draw={firstDraw} 抽取次数={drew} 询问次数={win.ClassPromptCountForTest}");
+
+                // 询问窗已在：再次点击不重复弹窗、不抽取
+                bool secondDraw = win.EnsureClassForDrawForTest(() => drew++, showPrompt: true);
+                Pump(160);
+                A("默认班级 5：询问期间重复点击不复弹、不抽取",
+                  !secondDraw && drew == 0 && win.ClassPromptCountForTest == 1,
+                  $"draw={secondDraw} 抽取次数={drew} 询问次数={win.ClassPromptCountForTest}");
+
+                // 用户在小窗中选班（不勾默认）：本次会话记住，不再询问
+                win.ApplyClassChoiceForTest(firstId, false);
+                win.CloseClassMiniForTest();
+                bool afterChoice = win.EnsureClassForDrawForTest(() => drew++, showPrompt: true);
+                A("默认班级 6：选班后本次会话不再询问并可直接抽取",
+                  afterChoice && drew == 1 && win.ClassPromptCountForTest == 1
+                  && win.ClassChosenForTest && AppConfig.DefaultClassId == "",
+                  $"draw={afterChoice} 抽取次数={drew} 询问次数={win.ClassPromptCountForTest} 默认仍为空={AppConfig.DefaultClassId == ""}");
+
+                // 勾选 / 取消勾选「设为默认」
+                AppConfig.DefaultClassId = firstId; AppConfig.Save();
+                win.SetCurrentClassForTest(firstId);
+                win.InitStartupClassForTest();
+                win.SetClassDefaultCheckedForTest(false);
+                A("默认班级 7：取消勾选「设为默认」清除默认（下次启动重新询问）",
+                  AppConfig.DefaultClassId == "" && !win.ClassDefaultCheckedForTest,
+                  "default='" + AppConfig.DefaultClassId + "'");
+                win.SetClassDefaultCheckedForTest(true);
+                A("默认班级 8：重新勾选写回当前班级",
+                  AppConfig.DefaultClassId == firstId && win.ClassDefaultCheckedForTest,
+                  "default='" + AppConfig.DefaultClassId + "' checked=" + win.ClassDefaultCheckedForTest);
+
+                // 默认班级已被名单删除：自动清除，避免引用不存在的班级
+                AppConfig.DefaultClassId = "__missing_class__"; AppConfig.Save();
+                win.InitStartupClassForTest();
+                A("默认班级 9：无效默认（班级已删除）自动清除并转为待询问",
+                  AppConfig.DefaultClassId == "" && !win.ClassChosenForTest,
+                  "default='" + AppConfig.DefaultClassId + "' chosen=" + win.ClassChosenForTest);
+
+                // 设置页：显式的「不设默认」+ 选择班级即写入默认并切换当前班级
+                AppConfig.DefaultClassId = lastId; AppConfig.Save();
+                win.SetCurrentClassForTest(lastId);
+                win.OpenSettingsForTest();
+                var dcSw = win.SettingsWindowForTest;
+                if (dcSw != null)
+                {
+                    A("默认班级 10：设置页含「不设默认」占位并回显已配置班级",
+                      win.SettingsDefaultClassItemCountForTest(dcSw) == ids.Count + 1
+                      && win.SettingsDefaultClassPlaceholderForTest(dcSw).Contains("不设默认")
+                      && win.SettingsDefaultClassSelectedIndexForTest(dcSw) == ids.IndexOf(lastId) + 1,
+                      $"items={win.SettingsDefaultClassItemCountForTest(dcSw)} sel={win.SettingsDefaultClassSelectedIndexForTest(dcSw)}");
+
+                    win.SettingsSelectDefaultClassIndexForTest(dcSw, 0);
+                    A("默认班级 11：设置里选「不设默认」清除默认并同步主窗",
+                      AppConfig.DefaultClassId == "" && !win.ClassDefaultCheckedForTest,
+                      "default='" + AppConfig.DefaultClassId + "' checked=" + win.ClassDefaultCheckedForTest);
+
+                    win.SettingsSelectDefaultClassIndexForTest(dcSw, ids.IndexOf(firstId) + 1);
+                    A("默认班级 12：设置里选择班级即写入默认并切换当前班级",
+                      AppConfig.DefaultClassId == firstId && win.CurrentClassIdForTest == firstId && win.ClassDefaultCheckedForTest,
+                      "default='" + AppConfig.DefaultClassId + "' currentIsFirst=" + (win.CurrentClassIdForTest == firstId) + " checked=" + win.ClassDefaultCheckedForTest);
+
+                    dcSw.Close();
+                    Pump(500);
+                }
+                else A("默认班级 10：设置页含「不设默认」占位并回显已配置班级", false, "设置窗口未打开");
+
+                // 名单编辑后当前班级被删除：优先回到仍然有效的默认班级
+                AppConfig.DefaultClassId = lastId; AppConfig.Save();
+                win.SetCurrentClassForTest(firstId);
+                win.SetClassChosenForTest(true);
+                win.AfterRosterReloadForTest("__missing_class__");
+                A("默认班级 13：当前班级被名单删除时回到有效默认班级",
+                  win.CurrentClassIdForTest == lastId && win.ClassChosenForTest,
+                  $"currentIsDefault={win.CurrentClassIdForTest == lastId} chosen={win.ClassChosenForTest}");
+            }
 
             // ---------- 5. 按钮清晰度：模板中不再使用 Effect ----------
             bool noEffectOnBigBtn = win.BigButtonsHaveNoEffectForTest();

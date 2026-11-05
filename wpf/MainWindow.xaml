@@ -180,7 +180,8 @@
                                VerticalAlignment="Center" Margin="0,0,10,0" />
                     <ComboBox x:Name="ClassCombo" MinWidth="150" VerticalContentAlignment="Center"
                               Style="{StaticResource ModernCombo}" SelectionChanged="OnClassChanged" />
-                    <CheckBox x:Name="ClassDefaultChk" Content="设为默认" IsChecked="True" FontSize="12"
+                    <CheckBox x:Name="ClassDefaultChk" Content="设为默认" FontSize="12"
+                              ToolTip="勾选后，下次启动直接使用当前班级；取消勾选则下次启动重新询问"
                               Foreground="{DynamicResource SubBrush}" VerticalAlignment="Center" Margin="10,0,0,0"
                               Checked="OnClassDefaultChk" Unchecked="OnClassDefaultChk" />
                 </StackPanel>

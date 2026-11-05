@@ -1,12 +1,12 @@
 {
   "product": "YBH幸运摇人器",
-  "version": "1.2.2+24",
-  "build": 24,
+  "version": "1.2.3+25",
+  "build": 25,
   "channel": "1.2",
   "url": "https://lr.yibianhui.cn/",
-  "setupUrl": "https://lr.yibianhui.cn/download/LuckyPicker-win-setup-1.2.2+build24.exe",
-  "setupSha256": "480ad335f55231777a66a41e351ceb5bee17d8c8b841e4e96aff21c9ce3ea6eb",
-  "notes": "1. 名单导入新增预览与列匹配：姓名/班级/性别/读音四列可调整，支持追加去重与整表替换。\n2. 导入与编辑保存前自动备份（保留 20 份），新增内置 Excel / CSV 导入模板。\n3. 班级与性别写法自动归一化；名单编辑器支持新增学生、直接输入新班号与多选删除。",
-  "releaseDate": "2026-11-02",
+  "setupUrl": "https://lr.yibianhui.cn/download/LuckyPicker-win-setup-1.2.3+build25.exe",
+  "setupSha256": "323b826c0c68419d492d886854c63525c30bea734202673d08819066528e7426",
+  "notes": "1. 默认班级成为唯一事实来源：设置后启动（含开机 /min 自启动）直接按默认班级抽取，不再询问。\n2. 仅首次安装、取消「设为默认」或默认班级被删除时询问一次；取消勾选立即清除默认。\n3. 主界面按钮、快捷键与悬浮球统一班级闸门，未选班级时先选班再抽取，不再静默抽第一个班。\n4. 设置页新增「不设默认（启动时询问）」；选择班级只设置默认、不立即抽人；名单重载自动清理失效默认。",
+  "releaseDate": "2026-11-06",
   "mandatory": false
 }

@@ -27,6 +27,7 @@ namespace LuckyPickerWpf
         readonly Action<UpdateResult> showUpdateDownload;  // 下载安装器（Owner = 本窗口）
         readonly Action<string> speak;                     // 试听（用主窗 TTS 引擎）
         readonly Action onChangeDefaultClass;
+        readonly Action<string> onDefaultClassChanged;     // 默认班级变化 → 主窗同步（"" = 取消默认）
         readonly Action onQuit;
         readonly Action themeChanged;                      // 配色切换 → 主窗刷新代码创建的控件
 
@@ -52,7 +53,8 @@ namespace LuckyPickerWpf
         public SettingsWindow(Window owner,
             Action applyVoice, Action ballChanged,
             Action<UpdateResult> showUpdateDownload, Action<string> speak,
-            Action changeDefaultClass, Action onQuit, Action themeChanged)
+            Action changeDefaultClass, Action onQuit, Action themeChanged,
+            Action<string> onDefaultClassChanged)
         {
             this.themeChanged = themeChanged;
             this.applyVoice = applyVoice;
@@ -60,6 +62,7 @@ namespace LuckyPickerWpf
             this.showUpdateDownload = showUpdateDownload;
             this.speak = speak;
             onChangeDefaultClass = changeDefaultClass;
+            this.onDefaultClassChanged = onDefaultClassChanged;
             this.onQuit = onQuit;
 
             Icon = owner.Icon;
@@ -389,35 +392,48 @@ namespace LuckyPickerWpf
 
             // 默认班级
             sp.Children.Add(MakeSubTitle("默认班级"));
-            sp.Children.Add(MakeHint("选定后启动时不再询问班级。"));
+            sp.Children.Add(MakeHint("选定后启动时不再询问班级；选择「不设默认」则下次启动询问一次。"));
             var defRow = new Grid { Margin = new Thickness(0, 4, 0, 10) };
             defRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             defRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            defaultClassCombo = new ComboBox { MinWidth = 180, FontSize = 13, Style = (Style)FindResource("ModernCombo") };
+            defaultClassCombo = new ComboBox { MinWidth = 220, FontSize = 13, Style = (Style)FindResource("ModernCombo") };
             try
             {
+                // 首项是显式的"不设默认"，避免未配置时静默显示第一个班级造成误导
+                defaultClassCombo.Items.Add(new ComboBoxItem { Content = "不设默认（启动时询问）", Tag = "" });
                 foreach (var id in App.Core.classIds)
                 {
                     string label = App.Core.ClassName(id);
                     defaultClassCombo.Items.Add(new ComboBoxItem { Content = label, Tag = id });
                 }
-                int sel = App.Core.classIds.IndexOf(AppConfig.DefaultClassId);
-                if (sel >= 0) defaultClassCombo.SelectedIndex = sel;
-                else if (defaultClassCombo.Items.Count > 0) defaultClassCombo.SelectedIndex = 0;
                 defaultClassCombo.SelectionChanged += (s, e) =>
                 {
                     if (loading) return;
-                    if (defaultClassCombo.SelectedItem is ComboBoxItem ci && ci.Tag is string cid)
+                    if (defaultClassCombo.SelectedItem is ComboBoxItem ci && ci.Tag is string cid && cid.Length > 0)
                     {
                         AppConfig.DefaultClassId = cid; AppConfig.Save();
                         statusText.Text = "✓ 默认班级已设为 " + App.Core.ClassName(cid);
+                        onDefaultClassChanged(cid);
+                    }
+                    else
+                    {
+                        AppConfig.DefaultClassId = ""; AppConfig.Save();
+                        statusText.Text = "✓ 已取消默认班级：下次启动会询问一次";
+                        onDefaultClassChanged("");
                     }
                 };
+                int sel = App.Core.classIds.IndexOf(AppConfig.DefaultClassId);
+                defaultClassCombo.SelectedIndex = sel >= 0 ? sel + 1 : 0;
             }
             catch { }
             Grid.SetColumn(defaultClassCombo, 0);
             defRow.Children.Add(defaultClassCombo);
-            var btnChange = new Button { Content = "重新选择…", Margin = new Thickness(10, 0, 0, 0), Style = (Style)FindResource("ModernBtnGhost") };
+            var btnChange = new Button
+            {
+                Content = "选择班级…", Margin = new Thickness(10, 0, 0, 0),
+                ToolTip = "选择一个班级并设为默认（不会立即抽取）",
+                Style = (Style)FindResource("ModernBtnGhost")
+            };
             btnChange.Click += (s, e) => { onChangeDefaultClass(); Close(); };
             Grid.SetColumn(btnChange, 1);
             defRow.Children.Add(btnChange);
@@ -802,6 +818,20 @@ namespace LuckyPickerWpf
 
         /// <summary>自检用：当前设置页读到的主题。</summary>
         internal string CurrentThemeIdForTest => ThemeManager.Current.Id;
+
+        // -------- 默认班级 --------
+        internal int DefaultClassItemCountForTest => defaultClassCombo?.Items.Count ?? -1;
+        internal string DefaultClassPlaceholderForTest =>
+            (defaultClassCombo?.Items.Count > 0 ? (defaultClassCombo.Items[0] as ComboBoxItem)?.Content as string : null) ?? "";
+        internal int DefaultClassSelectedIndexForTest => defaultClassCombo?.SelectedIndex ?? -1;
+
+        /// <summary>自检用：模拟选择默认班级下拉项（0 = 不设默认，1..n = 班级）。</summary>
+        internal bool SelectDefaultClassIndexForTest(int idx)
+        {
+            if (defaultClassCombo == null || idx < 0 || idx >= defaultClassCombo.Items.Count) return false;
+            defaultClassCombo.SelectedIndex = idx;
+            return true;
+        }
 
         // ==================== 辅助 ====================
 

@@ -765,7 +765,9 @@ namespace LuckyPickerWpf
         const int PAD = 10;      // 投影留白
         readonly Action<string, bool> onPick;
 
-        public ClassMiniWindow(IEnumerable<string> ids, Dictionary<string, string> names, Action<string, bool> pick)
+        public ClassMiniWindow(IEnumerable<string> ids, Dictionary<string, string> names, Action<string, bool> pick,
+            string subtitle = "点选后立即抽取 · 点击空白处关闭",
+            bool showDefaultOption = true, bool defaultChecked = true)
         {
             onPick = pick;
             WindowStyle = WindowStyle.None;
@@ -778,13 +780,17 @@ namespace LuckyPickerWpf
 
             var panel = new StackPanel();
             panel.Children.Add(new TextBlock { Text = "选择班级", FontSize = 11.5, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(ThemeManager.Current.Ink) });
-            panel.Children.Add(new TextBlock { Text = "点选后立即抽取 · 点击空白处关闭", FontSize = 8, Foreground = new SolidColorBrush(ThemeManager.Current.Sub), Margin = new Thickness(0, 2, 0, 6) });
-            var chkDefault = new CheckBox
+            panel.Children.Add(new TextBlock { Text = subtitle, FontSize = 8, Foreground = new SolidColorBrush(ThemeManager.Current.Sub), Margin = new Thickness(0, 2, 0, 6) });
+            CheckBox? chkDefault = null;
+            if (showDefaultOption)
             {
-                Content = "设为默认（以后启动不再询问）", IsChecked = true, FontSize = 9.5,
-                Foreground = new SolidColorBrush(ThemeManager.Current.AccentInk), Margin = new Thickness(0, 0, 0, 8)
-            };
-            panel.Children.Add(chkDefault);
+                chkDefault = new CheckBox
+                {
+                    Content = "设为默认（以后启动不再询问）", IsChecked = defaultChecked, FontSize = 9.5,
+                    Foreground = new SolidColorBrush(ThemeManager.Current.AccentInk), Margin = new Thickness(0, 0, 0, 8)
+                };
+                panel.Children.Add(chkDefault);
+            }
             foreach (var id in ids)
             {
                 string cid = id;
@@ -802,7 +808,7 @@ namespace LuckyPickerWpf
                 b.Click += (s, e) =>
                 {
                     // 先关小窗，等关闭完成后再执行回调（避免「窗口关闭期间 Show/Close」异常）
-                    bool asDefault = chkDefault.IsChecked == true;
+                    bool asDefault = chkDefault?.IsChecked == true;
                     Close();
                     Dispatcher.BeginInvoke(new Action(() => onPick?.Invoke(cid, asDefault)), DispatcherPriority.Background);
                 };
@@ -823,7 +829,7 @@ namespace LuckyPickerWpf
             Content = new Grid { Margin = new Thickness(PAD), Children = { card } };
 
             int count = CountOf(ids);
-            Height = 64 + count * 50 + 26 + PAD * 2;
+            Height = 64 + count * 50 + (showDefaultOption ? 26 : 0) + PAD * 2;
             Deactivated += (s, e) => { try { Close(); } catch { } };
         }
 
